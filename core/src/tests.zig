@@ -133,3 +133,44 @@ test "pbes2 rejects a scheme it does not implement" {
     const buf = hex("3013" ++ "300f" ++ "060b2a864886f70d010c050103" ++ "0400" ++ "0400");
     try testing.expectError(error.UnsupportedScheme, pbes2.parse(&buf));
 }
+
+// Fixtures are written by real Firefox over Marionette, never by this
+// project's own reading of the format. See tools/mkfixtures.py. A real
+// profile dropped into core/testdata by mistake fails these loudly: it
+// was never unlocked with these documented passwords.
+
+fn readFixtureLogins(gpa: std.mem.Allocator, path: []const u8) ![]u8 {
+    var threaded: std.Io.Threaded = .init(gpa, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    return std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .unlimited);
+}
+
+test "the fresh fixture decrypts every entry with an empty Primary Password" {
+    const keydb = @import("keydb.zig");
+    const logins = @import("logins.zig");
+    const json = try readFixtureLogins(testing.allocator, "core/testdata/fresh/logins.json");
+    defer testing.allocator.free(json);
+
+    const keys = try keydb.load("core/testdata/fresh/key4.db", "");
+    const stats = try logins.scan(testing.allocator, json, keys);
+    try testing.expectEqual(@as(usize, 3), stats.total);
+    try testing.expectEqual(@as(usize, 3), stats.decrypted);
+    try testing.expectEqual(@as(usize, 0), stats.failed);
+}
+
+test "the primary fixture needs its documented Primary Password" {
+    const keydb = @import("keydb.zig");
+    const logins = @import("logins.zig");
+    const json = try readFixtureLogins(testing.allocator, "core/testdata/primary/logins.json");
+    defer testing.allocator.free(json);
+
+    try testing.expectError(error.WrongPassword, keydb.load("core/testdata/primary/key4.db", ""));
+    try testing.expectError(error.WrongPassword, keydb.load("core/testdata/primary/key4.db", "wrong"));
+
+    const keys = try keydb.load("core/testdata/primary/key4.db", "fixture-primary-password-1");
+    const stats = try logins.scan(testing.allocator, json, keys);
+    try testing.expectEqual(@as(usize, 3), stats.total);
+    try testing.expectEqual(@as(usize, 3), stats.decrypted);
+    try testing.expectEqual(@as(usize, 0), stats.failed);
+}

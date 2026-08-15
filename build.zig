@@ -28,10 +28,14 @@ pub fn build(b: *std.Build) void {
     run.step.dependOn(b.getInstallStep());
     b.step("run", "Run the validation probe").dependOn(&run.step);
 
-    const tests = b.addTest(.{ .root_module = b.createModule(.{
+    const test_mod = b.createModule(.{
         .root_source_file = b.path("core/src/tests.zig"),
         .target = target,
         .optimize = optimize,
-    }) });
+        .link_libc = true,
+        .imports = &.{.{ .name = "c", .module = translate_c.createModule() }},
+    });
+    test_mod.linkSystemLibrary("sqlite3", .{});
+    const tests = b.addTest(.{ .root_module = test_mod });
     b.step("test", "Run the core tests").dependOn(&b.addRunArtifact(tests).step);
 }
