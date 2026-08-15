@@ -1,288 +1,211 @@
-# Firefox Password Viewer — Technical Feasibility Report
+# Firefox Password Viewer — Technical Plan
 
-Date: 2026-08-15
+Date: 2026-08-15. Supersedes the v1 feasibility report.
 
-## 1. Goal
+## 1. Status
 
-Read a local Firefox profile's saved logins and show them to the profile's
-owner, without Firefox running, with low memory and CPU use, and with a
-Zig core reused across a macOS native UI and a cross-platform TUI.
-
-## 2. Where Firefox stores the data
-
-A Firefox profile keeps three files relevant to this task:
-
-- `logins.json` — one JSON record per saved login: origin URL, encrypted
-  username, encrypted password, timestamps.
-- `key4.db` — a SQLite database. Table `metaData` holds a global salt and
-  a "password-check" value. Table `nssPrivate` holds the master key that
-  Firefox uses to encrypt every entry in `logins.json`.
-- `cert9.db` — certificate store, not needed for this task.
-
-On macOS the profile sits at
-`~/Library/Application Support/Firefox/Profiles/<name>.default-release/`,
-with `profiles.ini` in the parent folder listing all profiles.
-
-Format history, confirmed against the `firepwd` and `firefox_decrypt`
-projects:
-
-- Firefox < 32: `key3.db` (Berkeley DB) + `signons.sqlite`.
-- Firefox ≥ 32: `key3.db` + `logins.json`.
-- Firefox ≥ 58.0.2: `key4.db` (SQLite) + `logins.json`. This is the
-  format in every supported Firefox release today.
-- Firefox ≥ 75.0 (NSS 3.49, April 2020): the master key inside `key4.db`
-  is wrapped with PBKDF2-SHA256 + AES-256-CBC.
-- Firefox ≥ 144 (October 2025): the individual login fields in
-  `logins.json` switched from 3DES-CBC to AES-256-CBC. A profile last
-  touched before this release can still hold 3DES-encrypted entries next
-  to newer AES-256 ones, since Firefox re-encrypts an entry only when it
-  is added or edited. A reader built today must support both ciphers.
-
-## 3. Decryption without running Firefox
-
-Firefox protects the master key with a key derived from the user's
-Primary Password (called "Master Password" before Firefox 58). Most
-users never set one, in which case the derivation uses an empty string.
-When a Primary Password is set, the tool needs it from the user before
-it can decrypt anything, the same requirement `firefox_decrypt` and
-`PasswordFox` both have.
-
-Three ways exist to perform the decryption:
-
-**A. Link against NSS (`libnss3`).** Call `NSS_Init` against the profile
-path, then `PK11SDR_Decrypt` on each base64 blob from `logins.json`. This
-is what `unode/firefox_decrypt` does. On Linux this now requires
-`libnss3` 3.113 or newer to read a Firefox 144+ profile. On macOS, NSS
-ships inside `Firefox.app/Contents/Frameworks/`, so a standalone tool
-would need to bundle its own `libnss3.dylib` (for example via Homebrew's
-`nss` package) rather than reuse Firefox's copy from the app bundle.
-
-**B. Reimplement the NSS crypto directly.** Read the global salt and
-wrapped master key from `key4.db`, DER-decode the ASN.1 structure
-around them, derive a key with PBKDF2, and decrypt with AES-256-CBC or
-3DES-CBC depending on the OID found in the structure. Then decrypt each
-`logins.json` field the same way. This is what `firepwd.py` and
-`hack-browser-data` do, and it needs no NSS binary at all. The relevant
-OIDs, confirmed from the `firepwd` source:
-
-  - `1.2.840.113549.1.12.5.1.3` — PBE-SHA1-3DES (legacy master-key wrap).
-  - `1.2.840.113549.1.5.13` — PBES2 (current master-key wrap container).
-  - `1.2.840.113549.1.5.12` — PBKDF2.
-  - `1.2.840.113549.2.9` — HMAC-SHA256 (PBKDF2 PRF).
-  - `2.16.840.1.101.3.4.1.42` — AES-256-CBC.
-
-**C. Shell out to Firefox itself.** Firefox's own `about:logins` page can
-export all saved logins to a plaintext CSV file. This is the only method
-Mozilla documents and supports. It needs Firefox installed and running,
-and produces a plaintext file on disk, which the report's target tool
-is meant to avoid.
-
-Option B is the right fit for a standalone, low-footprint tool: no
-dependency on a specific NSS build, no need for Firefox to be installed,
-full control over memory handling of the decrypted secrets.
-
-## 4. Building option B in Zig
-
-- **SQLite access.** `key4.db` is a plain SQLite file. macOS ships
-  `libsqlite3.dylib` in `/usr/lib`, linkable straight from Zig with no
-  bundled copy needed. `vrischmann/zig-sqlite` wraps the C API; it works
-  against system SQLite on macOS/Linux. Its own docs say to expect
-  breaking changes on every Zig update until Zig reaches 1.0.
-- **JSON.** `logins.json` parses with `std.json` from Zig's standard
-  library. No extra dependency.
-- **PBKDF2.** Built into `std.crypto` (`std.crypto.pbkdf2`), with SHA-1
-  and SHA-256 both available as the PRF.
-- **AES-256.** The raw block cipher is in `std.crypto.core.aes.Aes256`.
-  CBC mode is not: Zig's standard library has no built-in block-cipher
-  mode wrapper (open issue since 2020). CBC over AES-256 is short to
-  write by hand — XOR the previous ciphertext block into the plaintext
-  before each block encrypt/decrypt call — but it is code this project
-  must own and test itself.
-- **3DES.** Not in `std.crypto` at all. DES is a well-documented, fixed
-  algorithm (16 rounds, a known S-box table, a 64-bit block); a from-
-  scratch Zig implementation is a few hundred lines and needs test
-  vectors from NIST or from the `firepwd` project to check against. This
-  is required only to read entries created before Firefox 144.
-- **ASN.1 DER parsing.** No existing Zig library was found for this. The
-  structures inside `key4.db` and inside each `logins.json` blob are a
-  small, fixed subset of DER (SEQUENCE, OCTET STRING, OBJECT IDENTIFIER,
-  INTEGER). A minimal hand-written parser covering only this subset is
-  practical and keeps the dependency count at zero.
-
-None of the above blocks the project. It does mean the crypto and ASN.1
-layers are original code, not a wrapped library, so they carry the
-correctness and audit burden of any cryptographic code written in-house.
-
-## 5. UI layer
-
-**Zig core.** Export a small C ABI surface from Zig: open a profile
-path, list logins (origin, username, decrypted or locked state), unlock
-with a given Primary Password, decrypt one entry, and zero any buffer
-holding decrypted data once the caller releases it. This matches the
-pattern Mitchell Hashimoto documented for Zig-plus-SwiftUI projects:
-the shared logic compiles to a static library with a C ABI, and each
-platform's native UI links against it directly.
-
-**Cross-platform TUI.** `rockorager/libvaxis` is an actively maintained
-Zig TUI library, built for Zig 0.16, running on macOS, Linux, BSD, and
-Windows. Its high-level `vxfw` API gives a widget-based application
-runtime, a reasonable fit for a login list plus a detail/reveal view.
-
-**macOS native UI.** A small SwiftUI app links the Zig static library
-through a bridging header and calls the exported C functions directly.
-No shared library loading step is needed; the Zig code becomes part of
-the app binary.
-
-**Windows/Linux native UI, later.** The same static library, compiled
-for each target, can back a native Win32/WinUI front end later. Until
-then the TUI already runs unmodified on Windows and Linux.
-
-## 6. Security and distribution notes
-
-- Read the profile files only; never copy `key4.db` or `logins.json` out
-  of the profile folder, and never write decrypted values to disk.
-- Zero the memory holding a decrypted password as soon as the UI is done
-  displaying it, and re-derive it on demand rather than caching a full
-  decrypted list.
-- Prompt for the Primary Password only when `key4.db` shows one is set,
-  and never store it.
-- On macOS, distribute Developer-ID-signed and notarized, outside the
-  Mac App Store. Mac App Store distribution would force App Sandbox,
-  which blocks reading `~/Library/Application Support/Firefox/...`
-  without the user picking the folder through an open panel each run,
-  since no sandbox entitlement covers another app's data folder.
-  Outside the sandbox, `~/Library/Application Support/` is not one of
-  the TCC-protected folders (Desktop, Documents, Downloads, Photos,
-  Mail, Messages, Safari, and similar are), so a signed, non-sandboxed
-  app reads the profile with no extra permission prompt.
-- Treat this as a single-user, local, offline tool: no telemetry, no
-  network calls, so no server-side attack surface to consider.
-
-## 7. Prior art, for comparison
-
-- `firepwd.py` (lclevy) — pure Python, no NSS dependency, updated
-  October 2025 for the Firefox 144 AES-256 change. The clearest
-  reference implementation for the crypto in section 3, option B.
-- `firefox_decrypt` (unode) — Python, links NSS, the option-A approach.
-- `PasswordFox` (NirSoft) — closed-source, Windows-only, version 1.75
-  (October 23, 2025) added Firefox 144 support; since version 1.60 it no
-  longer needs Firefox installed, meaning it also reimplements the NSS
-  crypto rather than loading `nss3.dll`.
-- Firefox Lockwise — Mozilla's mobile companion app, discontinued in
-  December 2021. Saved-login viewing on mobile now lives inside the
-  Firefox app itself; there is no current Mozilla-made desktop
-  equivalent, which is the gap this project fills.
-- The Mozilla Support Forum page referenced
-  (support.mozilla.org/pt-PT/questions/1350466) did not load through
-  automated fetch, so its content could not be checked directly. Any
-  guidance in that thread describing `key3.db` or Berkeley DB handling
-  predates Firefox 58 and no longer applies; guidance describing the
-  built-in `about:logins` CSV export (option C above) still works in
-  every current release.
-
-## 8. Risks
-
-- Zig is pre-1.0. The current stable release, 0.16.0 (April 2026), still
-  removed and redesigned major standard-library pieces this cycle. A
-  project on Zig should pin an exact compiler version and budget time
-  for migration on every Zig upgrade.
-- `zig-sqlite` carries the same pre-1.0 churn risk as Zig itself; its own
-  documentation says as much.
-- The hand-written 3DES, AES-CBC, and DER parser are original
-  cryptographic code. Each needs test vectors and a check against a
-  known-good implementation (`firepwd.py` is the natural reference)
-  before being trusted with real passwords.
-- Firefox's encryption scheme changed as recently as October 2025. A
-  future Firefox release could change it again, which would need a core
-  update to keep reading new profiles.
-
-## 9. Recommendation
-
-Build the Zig core around option B (reimplemented crypto, no NSS
-dependency), since it removes any runtime dependency on Firefox's own
-NSS build or a system NSS package. Start with the TUI on `libvaxis`,
-since it validates the C ABI surface and the crypto core on one
-platform before the SwiftUI front end is written. Add the SwiftUI shell
-once the core's list/unlock/decrypt functions are stable. Verify the
-3DES and AES-256-CBC paths against `firepwd.py` output on a real test
-profile before relying on either path for a live password store.
-
-## 10. Minimal core module breakdown
-
-A read-only viewer needs no general SQLite engine and no third-party
-SQLite binding. `key4.db` needs exactly two lookups (the `metaData` row
-and the `nssPrivate` row holding the wrapped master key), so the minimal
-build calls the system `libsqlite3` C API directly through `@cImport`
-(`sqlite3_open_v2`, `sqlite3_prepare_v2`, `sqlite3_step`,
-`sqlite3_column_blob`) instead of pulling in `zig-sqlite`. This drops
-one pre-1.0 dependency and keeps the SQL surface to two fixed queries.
-
-The core splits into ten modules. Each is a single Zig file with one
-job; arrows show what calls what.
-
-1. **`oids`** — constant bytes for the OIDs in section 3 (PBE-SHA1-3DES,
-   PBES2, PBKDF2, HMAC-SHA256, AES-256-CBC), plus a lookup function from
-   raw OID bytes to an `enum`. No dependencies. ~40 lines.
-2. **`der`** — a decoder for the DER subset Firefox uses: read a tag and
-   length, walk into a SEQUENCE, pull out an OCTET STRING, INTEGER, or
-   OBJECT IDENTIFIER. Depends on `oids` for OID recognition. ~150 lines.
-3. **`des`** — DES block encrypt/decrypt (the core 16-round algorithm)
-   and 3DES-CBC built on top of it. No dependencies. Needed only to read
-   entries encrypted before Firefox 144. ~300 lines, checked against
-   NIST or `firepwd.py` test vectors.
-4. **`aescbc`** — CBC mode over `std.crypto.core.aes.Aes256`, plus
-   PKCS7 padding removal. No dependencies. ~60 lines.
-5. **`kdf`** — PBKDF2 key derivation, wrapping `std.crypto.pbkdf2` with
-   the SHA-1 and SHA-256 variants Firefox picks between. No dependencies.
-   ~30 lines.
-6. **`sqlite3`** — the `@cImport` binding to the system C library, plus
-   two functions: read the `metaData` row, read the `nssPrivate` row.
-   Depends on the system `libsqlite3` (macOS: `/usr/lib/libsqlite3.dylib`,
-   no bundling needed). ~80 lines.
-7. **`keydb`** — opens `key4.db` through `sqlite3`, decodes the rows
-   through `der`, derives a key through `kdf`, unwraps the master key
-   through `des` or `aescbc` depending on the OID found, and returns the
-   raw master key plus a verified/not-verified flag from the
-   password-check value. Depends on `sqlite3`, `der`, `kdf`, `des`,
-   `aescbc`. ~120 lines.
-8. **`logins`** — reads `logins.json` with `std.json`, base64-decodes
-   each encrypted field with `std.base64`, decodes its DER wrapper
-   through `der`, and decrypts it with the master key from `keydb`
-   through `des` or `aescbc` depending on its own OID. Depends on `der`,
-   `des`, `aescbc`, `keydb`. ~100 lines.
-9. **`profiles`** — parses `profiles.ini` and returns profile names and
-   paths. No dependencies beyond `std.ini`-style key/value parsing
-   (hand-written, the format is a few lines of INI). ~50 lines.
-10. **`core`** — the exported C ABI: open a profile path, unlock with an
-    optional Primary Password, list origins/usernames, decrypt one
-    entry's password on request, and zero a returned buffer once the
-    caller is done with it. Depends on `profiles`, `keydb`, `logins`.
-    ~80 lines, and the only module a UI links against.
-
-Suggested layout:
+The decryption core is built and verified against a live profile. `zig build
+run` reports:
 
 ```
-core/
-  src/
-    oids.zig
-    der.zig
-    des.zig
-    aescbc.zig
-    kdf.zig
-    sqlite3.zig
-    keydb.zig
-    logins.zig
-    profiles.zig
-    core.zig        # exported C ABI, build target: static library
-  build.zig
-tui/
-  src/main.zig       # libvaxis frontend, links core/
-macos/
-  Sources/           # SwiftUI frontend, links core/ through a bridging header
+profile:   ~/Library/Application Support/Firefox/Profiles/cbl1mroj.default-release
+password-check verified with an empty Primary Password
+aes256 key: present (32 bytes)
+3des key:   present (24 bytes)
+logins:    1703 total, 1701 decrypted, 2 incomplete, 0 legacy 3des, 0 failed
 ```
 
-Explicitly out of scope for the minimal build: writing or editing
-logins, `cert9.db`/certificate handling, Firefox Sync, form-autofill
-data, and any data from other Mozilla products (Thunderbird,
-SeaMonkey). Each can be added later without changing the module split
-above.
+Front ends are not started. Everything in sections 3 and 4 was measured on that
+profile, not inferred from other projects.
+
+Verified environment: Firefox 152.0.6, macOS 15.7.7 arm64, Zig 0.16.0.
+
+## 2. Goal and non-goals
+
+Read a local Firefox profile's saved logins and show them to the profile owner.
+A TUI runs on macOS, Linux and Windows. A SwiftUI app covers macOS.
+
+Out of scope: writing or editing logins, `cert9.db`, Firefox Sync, form autofill,
+credit cards, other Mozilla products, and recovering an unknown Primary Password.
+
+Profiles that Firefox 144 or newer has never opened are also out of scope. They
+hold 3DES entries, and this tool reports them rather than decrypting them.
+
+## 3. Where Firefox stores the data
+
+- `logins.json` — one record per saved login. The on-disk keys are `hostname`,
+  `httpRealm`, `formSubmitURL`, `usernameField`, `passwordField`,
+  `encryptedUsername`, `encryptedPassword`, `guid`, `encType`, `timeCreated`,
+  `timeLastUsed`, `timePasswordChanged`, `timesUsed`, `encryptedUnknownFields`.
+  There is no `origin` key; that name belongs to the JavaScript side.
+- `key4.db` — SQLite. `metaData` holds the global salt and the password-check
+  value under `id = 'password'`. `nssPrivate` holds the wrapped master keys.
+- `cert9.db` — certificate store, unused here.
+
+`metaData` carried about seventy rows on the test profile and `nssPrivate`
+carried three, so both queries filter rather than taking the first row.
+
+### Two master keys, one key id
+
+`nssPrivate` holds **two** rows under CKA_ID `f8000000000000000000000000000001`
+with object class `CKO_SECRET_KEY` (`a0 = x'00000004'`):
+
+| wrapped size | decrypted size | key |
+|---|---|---|
+| 32 bytes | 24 bytes | legacy 3DES |
+| 48 bytes | 32 bytes | AES-256, added by Firefox 144 |
+
+Firefox 144 adds the AES-256 key and leaves the 3DES key in place. Reading one
+row returns the legacy key, and every AES entry then fails its PKCS7 check. Both
+rows are unwrapped and sorted by decrypted length.
+
+### Firefox 144 migrated the whole store at once
+
+1625 of the 1701 encrypted entries on the test profile were created before
+October 2025, and the oldest dates to March 2011. All 1701 use AES-256. The v1
+report claimed Firefox re-encrypts an entry only when it is added or edited.
+That is wrong: the upgrade re-encrypted the entire store.
+
+### profiles.ini
+
+Since Firefox 67 the `[InstallXXXX]` section names the profile for a given
+installation. `Default=1` under `[ProfileN]` is the pre-67 fallback. On the test
+machine `Default=1` sits on a profile that contains no `key4.db`, and the real
+profile is named only by the install section. Resolution reads the install
+section first.
+
+## 4. The decryption chain
+
+Both layers use PBKDF2 and AES-256-CBC. They differ in how the IV is carried.
+
+**Unwrapping a key4.db value** (`metaData.item2` and each `nssPrivate.a11`):
+
+```
+seed = SHA1(globalSalt ‖ primaryPassword)
+key  = PBKDF2-HMAC-SHA256(seed, entrySalt, iterations, keyLength)
+iv   = the full DER encoding of the IV element, header included
+plain = AES-256-CBC-decrypt(ciphertext, key, iv), PKCS7 stripped
+```
+
+The IV element carries a 14-byte body. NSS feeds the two header octets plus that
+body to AES as the 16-byte IV. Passing the body alone produces garbage.
+
+`iterations` was 1 on the test profile. It is read from the structure.
+
+**Decrypting a logins.json field:** base64-decode, then parse
+`SEQUENCE { OCTET keyId, SEQUENCE { OID cipher, OCTET iv }, OCTET ciphertext }`.
+Here the IV is the element **body**, 16 bytes, used directly. Decrypt with the
+32-byte master key.
+
+`metaData.item2` decrypts to the ASCII string `password-check`. This confirms the
+Primary Password before any key material is unwrapped, and it needs no
+credential, which makes it the test gate for the whole chain.
+
+## 5. Decisions
+
+| Decision | Choice | Rejected alternative |
+|---|---|---|
+| Crypto source | Reimplement PBES2 in Zig | Linking NSS needs a matching libnss3 per platform and a bundled dylib on macOS |
+| 3DES | Not implemented. `sdr.decrypt` returns `LegacyTripleDes` | A DES implementation adds roughly 300 lines of legacy cipher that 0 of 1701 entries need |
+| DER | Own bounds-checked reader | `std.crypto.Certificate.der` has no bounds checks, no canonical-form checks and no tests (ziglang/zig#19775) |
+| C interop | `b.addTranslateC` | `@cImport` is deprecated in Zig 0.16 |
+| SQLite | System library for now | Windows ships none; see section 8 |
+| Zig | Pin 0.16.0 | Tracking master breaks on each stdlib redesign |
+| Reveal | Masked by default, reveal one entry, copy to clipboard | Printing every password fills terminal scrollback |
+
+## 6. Module layout
+
+```
+core/src/
+  der.zig        bounds-checked TLV reader
+  oids.zig       encoded OID bodies and the Cipher enum
+  aescbc.zig     AES-256-CBC over std.crypto.core.aes, PKCS7
+  pbes2.zig      unwraps key4.db values
+  sdr.zig        parses logins.json blobs
+  profiles.zig   resolves the default profile
+  keydb.zig      reads key4.db, returns the master keys
+  logins.zig     decrypts logins.json
+  main.zig       validation probe
+  c.h            sqlite3 and stdlib headers for addTranslateC
+  tests.zig      NIST and DER vectors
+build.zig
+```
+
+`des.zig` from the v1 plan is not built.
+
+Still to write: `core.zig`, the exported C ABI that both front ends link. It
+needs open, unlock, list, reveal one entry, and wipe a returned buffer.
+
+## 7. Front ends
+
+**TUI** on `libvaxis` (Zig 0.16, `vxfw` framework, macOS/Linux/Windows). The list
+holds 1703 entries on the test profile, so incremental search over hostname and
+username is required rather than optional.
+
+**SwiftUI** on macOS links the same static library through a bridging header.
+
+Both mask passwords by default. Reveal acts on one entry at a time. Copy writes
+to the clipboard marked `org.nspasteboard.ConcealedType`, which keeps clipboard
+managers from recording it, and clears after a timeout.
+
+## 8. Build and platform notes
+
+`/usr/lib/libsqlite3.dylib` does not exist as a file on macOS 11 and later. It
+lives in the dyld shared cache, and linking resolves through the SDK stub at
+`$(xcrun --show-sdk-path)/usr/lib/libsqlite3.tbd`. Building therefore needs the
+Command Line Tools, and cross-compiling to macOS from another host does not
+work as configured.
+
+Windows ships no system SQLite. Before the Windows target, vendor the SQLite
+amalgamation and compile it with Zig's bundled clang. That also makes macOS and
+Linux builds hermetic. The rejected alternative, a hand-written reader for the
+SQLite page format, needs varint decoding, overflow pages and freelist handling
+on a read path that must not return wrong bytes.
+
+macOS distribution is Developer ID signed and notarized, outside the Mac App
+Store. App Sandbox would block reading another app's data directory without a
+per-run open panel. Outside the sandbox `~/Library/Application Support` is not
+TCC-protected, so no permission prompt appears.
+
+## 9. Security
+
+- Open `key4.db` read-only. Never copy profile files.
+- Wipe plaintext with `std.crypto.secureZero`. A plain `@memset` can be
+  optimized away.
+- Prompt for the Primary Password only when the password-check fails with an
+  empty string. Never store it.
+- No network calls and no telemetry.
+
+## 10. Risks
+
+- Zig 0.16 removed `std.posix.getenv`, `std.time.Timer` and the old `std.fs`
+  entry points, and moved filesystem access under `std.Io`. Each upgrade needs
+  migration time. The compiler version is pinned.
+- `aescbc.zig`, `der.zig` and the PBES2 parsing are original code. They are
+  covered by NIST vectors and by the password-check gate on a real profile.
+- Firefox changed this format in October 2025. Cipher selection reads the OID
+  from the file, so a further change surfaces as an explicit unsupported-cipher
+  error.
+- A profile Firefox has open may carry `key4.db-wal`. The read-only path has not
+  been tested in that state.
+
+## 11. Next steps
+
+1. Export the C ABI from `core.zig` and wipe returned buffers on release.
+2. Build the TUI on libvaxis with incremental search, masked rows, reveal and
+   copy.
+3. Test against a profile that has Firefox open.
+4. Add the Primary Password prompt path; the test profile has none, so that
+   branch is unexercised.
+5. Vendor the SQLite amalgamation before targeting Windows.
+6. Build the SwiftUI shell.
+
+## 12. Prior art
+
+- `firepwd.py` (lclevy) — pure Python, no NSS, updated October 2025 for the
+  Firefox 144 change. The reference for the IV construction in section 4.
+- `firefox_decrypt` (unode) — Python, links NSS.
+- `PasswordFox` (NirSoft) — closed source, Windows only, version 1.75 added
+  Firefox 144 support.
+- Firefox Lockwise — Mozilla's mobile app, discontinued December 2021. No
+  desktop equivalent exists.
