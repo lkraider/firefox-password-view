@@ -11,6 +11,7 @@ reading of the format was rejected.
 | `fresh` | none (empty Primary Password) | 152.0.6 | one AES-256 key row, 3 logins |
 | `primary` | `fixture-primary-password-1` | 152.0.6 | a real Primary Password: a 48-byte SHA384 global salt, rejection of the empty and the wrong password |
 | `two-profiles` | none | 152.0.6 | `profiles.ini` install-section precedence over the legacy `Default=1` flag |
+| `sync-shaped` | none (empty Primary Password) | 152.0.6 | a `chrome://FirefoxAccounts` row, a `moz-extension://` row, and 2 sync deletion tombstones |
 
 `two-profiles/profiles.ini` is hand-written, not produced by Marionette:
 `profiles.ini` is plain text with no cryptographic content, so nothing here
@@ -19,6 +20,12 @@ is a claim about what the format reader has to agree with a writer on.
 `key4.db` and `logins.json`; `Profiles/abandoned.default` is empty, standing
 in for a profile the legacy `Default=1` flag points at that Firefox no
 longer uses.
+
+`sync-shaped`'s 2 tombstones are appended to `logins.json` as plain JSON
+text after Firefox quits, not written by Firefox itself: a tombstone
+carries no encrypted field, so nothing about the cryptographic format is
+being faked, and a real Mozilla Account sign-in was never in scope for a
+fixture.
 
 Regenerate a fixture with, for example:
 

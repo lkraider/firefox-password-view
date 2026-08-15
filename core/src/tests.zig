@@ -191,3 +191,20 @@ test "two-profiles resolves to the profile the install section names, not Defaul
     defer testing.allocator.free(key4);
     _ = try keydb.load(key4, "");
 }
+
+test "the sync-shaped fixture carries tombstones, an account row and an extension row" {
+    // logins.zig does not yet give tombstones their own category (that is
+    // milestone 1); today they land in `incomplete` because they carry no
+    // encrypted fields. This test pins today's behaviour, not the goal.
+    const keydb = @import("keydb.zig");
+    const logins = @import("logins.zig");
+    const json = try readFixtureLogins(testing.allocator, "core/testdata/sync-shaped/logins.json");
+    defer testing.allocator.free(json);
+
+    const keys = try keydb.load("core/testdata/sync-shaped/key4.db", "");
+    const stats = try logins.scan(testing.allocator, json, keys);
+    try testing.expectEqual(@as(usize, 7), stats.total);
+    try testing.expectEqual(@as(usize, 5), stats.decrypted);
+    try testing.expectEqual(@as(usize, 2), stats.incomplete);
+    try testing.expectEqual(@as(usize, 0), stats.failed);
+}
