@@ -103,6 +103,31 @@ test "a 3des entry reports the migration error rather than decrypting" {
     try testing.expectError(error.LegacyTripleDes, sdr.decrypt(blob, @splat(0), &out));
 }
 
+test "pbes2 seeds with SHA384 when the global salt is 48 bytes" {
+    // Captured from a real Firefox 152 profile after setting a synthetic
+    // Primary Password ("fixture-primary-password-1"). A never-initialized
+    // token carries a 20-byte SHA1-length global salt; setting a Primary
+    // Password for the first time replaces it with this 48-byte SHA384-length
+    // one, and NSS seeds with SHA384 instead of SHA1 to match. Getting this
+    // wrong makes the correct password look wrong (regression: it did).
+    const global_salt = hex("661C366FD887564582212421FC6E1388A4F37714EFA99166B3AE3D767079E607" ++
+        "6FFA02718064165695084DAE22EDB6E9");
+    const item2 = hex("308182306E06092A864886F70D01050D3061304206092A864886F70D01050C30" ++
+        "35042087E7510D9573FAC37B76B335B4404A3B8C088B1A7B80AA01FCA56A3F87" ++
+        "FBB7D702022710020120300A06082A864886F70D0209301B0609608648016503" ++
+        "04012A040E9C99693DDEF51F20FE260E1FD5790410155C6C52F21267D0E27A5E" ++
+        "64315CB340");
+
+    var out: [256]u8 = undefined;
+    const plain = try pbes2.unwrap(&item2, &global_salt, "fixture-primary-password-1", &out);
+    try testing.expectEqualStrings("password-check", plain);
+
+    try testing.expectError(
+        error.BadPadding,
+        pbes2.unwrap(&item2, &global_salt, "wrong-password", &out),
+    );
+}
+
 test "pbes2 rejects a scheme it does not implement" {
     // AlgorithmIdentifier carrying the legacy PBE-SHA1-3DES OID.
     const buf = hex("3013" ++ "300f" ++ "060b2a864886f70d010c050103" ++ "0400" ++ "0400");

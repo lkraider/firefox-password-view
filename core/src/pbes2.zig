@@ -12,6 +12,7 @@ pub const Error = error{
     UnsupportedCipher,
     BadIvLength,
     UnsupportedKeyLen,
+    UnsupportedGlobalSaltLen,
 } || der.Error || aescbc.Error || std.crypto.errors.WeakParametersError ||
     std.crypto.errors.OutputTooLongError;
 
@@ -69,26 +70,45 @@ pub fn parse(blob: []const u8) Error!Params {
     return params;
 }
 
-pub fn deriveKey(p: Params, global_salt: []const u8, password: []const u8, out: []u8) Error!void {
-    var seed: [20]u8 = undefined;
-    defer std.crypto.secureZero(u8, &seed);
+/// A never-initialized token stores a 20-byte SHA1-length global salt and
+/// seeds with SHA1. Setting a Primary Password for the first time replaces it
+/// with a 48-byte SHA384-length salt and seeds with SHA384 instead. NSS picks
+/// the hash by matching the salt length, in `sftkdb_passwordToKey`.
+fn seedHash(global_salt: []const u8, password: []const u8, out: []u8) Error!void {
+    switch (global_salt.len) {
+        20 => {
+            var h = std.crypto.hash.Sha1.init(.{});
+            h.update(global_salt);
+            h.update(password);
+            h.final(out[0..20]);
+        },
+        48 => {
+            var h = std.crypto.hash.sha2.Sha384.init(.{});
+            h.update(global_salt);
+            h.update(password);
+            h.final(out[0..48]);
+        },
+        else => return error.UnsupportedGlobalSaltLen,
+    }
+}
 
-    var sha1 = std.crypto.hash.Sha1.init(.{});
-    sha1.update(global_salt);
-    sha1.update(password);
-    sha1.final(&seed);
+pub fn deriveKey(p: Params, global_salt: []const u8, password: []const u8, out: []u8) Error!void {
+    var seed: [48]u8 = undefined;
+    defer std.crypto.secureZero(u8, &seed);
+    try seedHash(global_salt, password, &seed);
+    const seed_slice = seed[0..global_salt.len];
 
     switch (p.prf) {
         .hmac_sha256 => try std.crypto.pwhash.pbkdf2(
             out,
-            &seed,
+            seed_slice,
             p.entry_salt,
             p.iterations,
             std.crypto.auth.hmac.sha2.HmacSha256,
         ),
         .hmac_sha1 => try std.crypto.pwhash.pbkdf2(
             out,
-            &seed,
+            seed_slice,
             p.entry_salt,
             p.iterations,
             std.crypto.auth.hmac.HmacSha1,
