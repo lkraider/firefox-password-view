@@ -1,0 +1,11 @@
+# Local Zig toolchain and its tarballs, downloaded per machine.
+zig/
+
+.zig-cache/
+zig-out/
+
+.DS_Store
+
+# Anything extracted from a profile. Never commit key material.
+*.db
+logins*.json
