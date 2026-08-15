@@ -174,3 +174,20 @@ test "the primary fixture needs its documented Primary Password" {
     try testing.expectEqual(@as(usize, 3), stats.decrypted);
     try testing.expectEqual(@as(usize, 0), stats.failed);
 }
+
+test "two-profiles resolves to the profile the install section names, not Default=1" {
+    const profiles = @import("profiles.zig");
+    const keydb = @import("keydb.zig");
+    const firefox_dir = "core/testdata/two-profiles";
+
+    const ini = try readFixtureLogins(testing.allocator, firefox_dir ++ "/profiles.ini");
+    defer testing.allocator.free(ini);
+
+    const profile = try profiles.resolveDefault(testing.allocator, firefox_dir, ini);
+    defer testing.allocator.free(profile);
+    try testing.expectEqualStrings(firefox_dir ++ "/Profiles/real.default-release", profile);
+
+    const key4 = try std.fmt.allocPrintSentinel(testing.allocator, "{s}/key4.db", .{profile}, 0);
+    defer testing.allocator.free(key4);
+    _ = try keydb.load(key4, "");
+}

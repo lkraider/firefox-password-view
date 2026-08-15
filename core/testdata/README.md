@@ -10,6 +10,15 @@ reading of the format was rejected.
 |---|---|---|---|
 | `fresh` | none (empty Primary Password) | 152.0.6 | one AES-256 key row, 3 logins |
 | `primary` | `fixture-primary-password-1` | 152.0.6 | a real Primary Password: a 48-byte SHA384 global salt, rejection of the empty and the wrong password |
+| `two-profiles` | none | 152.0.6 | `profiles.ini` install-section precedence over the legacy `Default=1` flag |
+
+`two-profiles/profiles.ini` is hand-written, not produced by Marionette:
+`profiles.ini` is plain text with no cryptographic content, so nothing here
+is a claim about what the format reader has to agree with a writer on.
+`Profiles/real.default-release` is a copy of the `fresh` fixture's
+`key4.db` and `logins.json`; `Profiles/abandoned.default` is empty, standing
+in for a profile the legacy `Default=1` flag points at that Firefox no
+longer uses.
 
 Regenerate a fixture with, for example:
 
