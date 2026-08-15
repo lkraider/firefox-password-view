@@ -25,7 +25,12 @@ fn decryptField(b64: []const u8, keys: keydb.Keys, scratch: []u8, out: []u8) ![]
     if (n > scratch.len) return error.TooLarge;
     try decoder.decode(scratch[0..n], b64);
 
+    // Parse before requiring a key. A profile Firefox 144 has never opened
+    // carries no AES-256 key at all, and every entry is des_ede3_cbc; asking
+    // for keys.aes256 first would report NoSdrKey instead of the more useful
+    // LegacyTripleDes on every single entry.
     const blob = try sdr.parse(scratch[0..n]);
+    if (blob.cipher == .des_ede3_cbc) return error.LegacyTripleDes;
     const key = keys.aes256 orelse return error.NoSdrKey;
     return sdr.decrypt(blob, key, out);
 }

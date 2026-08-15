@@ -103,6 +103,26 @@ test "a 3des entry reports the migration error rather than decrypting" {
     try testing.expectError(error.LegacyTripleDes, sdr.decrypt(blob, @splat(0), &out));
 }
 
+test "logins.scan reports legacy_3des rather than NoSdrKey when no AES-256 key exists" {
+    // A profile Firefox 144 has never opened carries no AES-256 key at all
+    // (regression: decryptField used to ask for keys.aes256 before parsing
+    // the blob, so every entry surfaced as the generic NoSdrKey instead of
+    // the more useful LegacyTripleDes).
+    const keydb = @import("keydb.zig");
+    const logins = @import("logins.zig");
+    const json =
+        \\{"logins": [{
+        \\  "encryptedUsername": "MDoEEPgAAAAAAAAAAAAAAAAAAAEwFAYIKoZIhvcNAwcECAABAgMEBQYHBBCqqqqqqqqqqqqqqqqqqqqq",
+        \\  "encryptedPassword": "MDoEEPgAAAAAAAAAAAAAAAAAAAEwFAYIKoZIhvcNAwcECAABAgMEBQYHBBCqqqqqqqqqqqqqqqqqqqqq"
+        \\}]}
+    ;
+    const keys: keydb.Keys = .{ .aes256 = null, .des3 = @splat(0) };
+    const stats = try logins.scan(testing.allocator, json, keys);
+    try testing.expectEqual(@as(usize, 1), stats.total);
+    try testing.expectEqual(@as(usize, 1), stats.legacy_3des);
+    try testing.expectEqual(@as(usize, 1), stats.failed);
+}
+
 test "pbes2 seeds with SHA384 when the global salt is 48 bytes" {
     // Captured from a real Firefox 152 profile after setting a synthetic
     // Primary Password ("fixture-primary-password-1"). A never-initialized
