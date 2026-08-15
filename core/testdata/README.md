@@ -12,6 +12,8 @@ reading of the format was rejected.
 | `primary` | `fixture-primary-password-1` | 152.0.6 | a real Primary Password: a 48-byte SHA384 global salt, rejection of the empty and the wrong password |
 | `two-profiles` | none | 152.0.6 | `profiles.ini` install-section precedence over the legacy `Default=1` flag |
 | `sync-shaped` | none (empty Primary Password) | 152.0.6 | a `chrome://FirefoxAccounts` row, a `moz-extension://` row, and 2 sync deletion tombstones |
+| `unmigrated` | none | 143.0.4 | a real 24-byte 3DES key, no AES-256 key, and 3 genuinely `des_ede3_cbc` entries |
+| `migrated` | none | `unmigrated`'s profile, opened once by 152.0.6 | both key rows under one CKA_ID, and every entry re-encrypted to AES-256 |
 
 `two-profiles/profiles.ini` is hand-written, not produced by Marionette:
 `profiles.ini` is plain text with no cryptographic content, so nothing here
@@ -26,6 +28,12 @@ text after Firefox quits, not written by Firefox itself: a tombstone
 carries no encrypted field, so nothing about the cryptographic format is
 being faked, and a real Mozilla Account sign-in was never in scope for a
 fixture.
+
+`unmigrated` needs Firefox 143.0.4, from
+`ftp.mozilla.org/pub/firefox/releases/143.0.4/mac/en-US/`, since Firefox 144
+is what adds the AES-256 key. `migrated` is `unmigrated`'s profile directory,
+copied and then opened once by the installed Firefox 152 with `mkfixtures.py
+--profile <copy> migrate`; nothing is added to it.
 
 Regenerate a fixture with, for example:
 

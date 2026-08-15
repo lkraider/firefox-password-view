@@ -212,6 +212,47 @@ test "two-profiles resolves to the profile the install section names, not Defaul
     _ = try keydb.load(key4, "");
 }
 
+test "the unmigrated fixture carries a real 24-byte 3DES key and no AES-256 key" {
+    // Written by Firefox 143.0.4, before Firefox 144 added the AES-256 key
+    // and re-encrypted the store. Every entry here is genuinely des_ede3_cbc.
+    const keydb = @import("keydb.zig");
+    const logins = @import("logins.zig");
+    const json = try readFixtureLogins(testing.allocator, "core/testdata/unmigrated/logins.json");
+    defer testing.allocator.free(json);
+
+    const keys = try keydb.load("core/testdata/unmigrated/key4.db", "");
+    try testing.expect(keys.aes256 == null);
+    try testing.expect(keys.des3 != null);
+
+    const stats = try logins.scan(testing.allocator, json, keys);
+    try testing.expectEqual(@as(usize, 3), stats.total);
+    try testing.expectEqual(@as(usize, 3), stats.legacy_3des);
+    try testing.expectEqual(@as(usize, 3), stats.failed);
+    try testing.expectEqual(@as(usize, 0), stats.decrypted);
+}
+
+test "the migrated fixture carries both key rows and decrypts every entry" {
+    // The unmigrated fixture's profile, opened once by Firefox 152. NSS
+    // leaves the original 24-byte 3DES key row in place under the same
+    // CKA_ID and adds the 32-byte AES-256 row alongside it, and re-encrypts
+    // every entry to AES-256. Picking the first nssPrivate row by insertion
+    // order returns the 3DES key and fails every entry's PKCS7 check; the
+    // reader must sort by decrypted length instead.
+    const keydb = @import("keydb.zig");
+    const logins = @import("logins.zig");
+    const json = try readFixtureLogins(testing.allocator, "core/testdata/migrated/logins.json");
+    defer testing.allocator.free(json);
+
+    const keys = try keydb.load("core/testdata/migrated/key4.db", "");
+    try testing.expect(keys.aes256 != null);
+    try testing.expect(keys.des3 != null);
+
+    const stats = try logins.scan(testing.allocator, json, keys);
+    try testing.expectEqual(@as(usize, 3), stats.total);
+    try testing.expectEqual(@as(usize, 3), stats.decrypted);
+    try testing.expectEqual(@as(usize, 0), stats.failed);
+}
+
 test "the sync-shaped fixture carries tombstones, an account row and an extension row" {
     // logins.zig does not yet give tombstones their own category (that is
     // milestone 1); today they land in `incomplete` because they carry no
