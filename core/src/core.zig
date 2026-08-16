@@ -76,60 +76,51 @@ fn mapCommonError(err: anyerror) ffpw_status {
     };
 }
 
-fn resolveFirefoxDir(io: std.Io) ![]u8 {
+fn resolveFirefoxDir() ![]u8 {
     const home_c = c.getenv("HOME") orelse return error.NoHome;
     const home = std.mem.span(home_c);
-    _ = io;
     return std.fs.path.join(gpa, &.{ home, "Library/Application Support/Firefox" });
+}
+
+/// Reads profiles.ini fresh and enumerates it. The caller frees the result
+/// with `freeProfileList`.
+fn listProfiles(io: std.Io) ![]profiles.Profile {
+    const firefox_dir = try resolveFirefoxDir();
+    defer gpa.free(firefox_dir);
+
+    const cwd = std.Io.Dir.cwd();
+    const ini_path = try std.fs.path.join(gpa, &.{ firefox_dir, "profiles.ini" });
+    defer gpa.free(ini_path);
+    const ini = try cwd.readFileAlloc(io, ini_path, gpa, .unlimited);
+    defer gpa.free(ini);
+
+    return profiles.enumerate(gpa, firefox_dir, ini);
+}
+
+fn freeProfileList(list: []profiles.Profile) void {
+    for (list) |p| {
+        gpa.free(p.name);
+        gpa.free(p.path);
+    }
+    gpa.free(list);
 }
 
 export fn ffpw_profile_count() callconv(.c) usize {
     var threaded: std.Io.Threaded = .init(gpa, .{});
     defer threaded.deinit();
-    const io = threaded.io();
 
-    const firefox_dir = resolveFirefoxDir(io) catch return 0;
-    defer gpa.free(firefox_dir);
-
-    const cwd = std.Io.Dir.cwd();
-    const ini_path = std.fs.path.join(gpa, &.{ firefox_dir, "profiles.ini" }) catch return 0;
-    defer gpa.free(ini_path);
-    const ini = cwd.readFileAlloc(io, ini_path, gpa, .unlimited) catch return 0;
-    defer gpa.free(ini);
-
-    const list = profiles.enumerate(gpa, firefox_dir, ini) catch return 0;
-    defer {
-        for (list) |p| {
-            gpa.free(p.name);
-            gpa.free(p.path);
-        }
-        gpa.free(list);
-    }
+    const list = listProfiles(threaded.io()) catch return 0;
+    defer freeProfileList(list);
     return list.len;
 }
 
 export fn ffpw_profile_at(i: u32, buf: ?[*]u8, cap: usize, needed: ?*usize) callconv(.c) ffpw_status {
     var threaded: std.Io.Threaded = .init(gpa, .{});
     defer threaded.deinit();
-    const io = threaded.io();
 
-    const firefox_dir = resolveFirefoxDir(io) catch return .err_io;
-    defer gpa.free(firefox_dir);
+    const list = listProfiles(threaded.io()) catch return .err_io;
+    defer freeProfileList(list);
 
-    const cwd = std.Io.Dir.cwd();
-    const ini_path = std.fs.path.join(gpa, &.{ firefox_dir, "profiles.ini" }) catch return .err_oom;
-    defer gpa.free(ini_path);
-    const ini = cwd.readFileAlloc(io, ini_path, gpa, .unlimited) catch return .err_io;
-    defer gpa.free(ini);
-
-    const list = profiles.enumerate(gpa, firefox_dir, ini) catch return .err_oom;
-    defer {
-        for (list) |p| {
-            gpa.free(p.name);
-            gpa.free(p.path);
-        }
-        gpa.free(list);
-    }
     if (i >= list.len) return .err_range;
     const path = list[i].path;
     if (needed) |n| n.* = path.len;
