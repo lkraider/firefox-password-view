@@ -65,3 +65,7 @@ live profile, and the reasoning behind each implementation decision.
 Milestones 0 through 5 of the implementation plan are complete: the
 decryption core, both front ends, the C ABI, and the fixture and fuzz test
 suites. See `FEASIBILITY.md` for what has been measured and where.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).
