@@ -51,3 +51,42 @@ jobs:
       - name: Bundle the macOS app (release)
         working-directory: macos
         run: ./scripts/bundle.sh
+
+  reproducible-build:
+    # Packages the release artifacts twice from a clean state and diffs
+    # them: catches a regression in build.zig's strip, bundle.sh's -gnone,
+    # or the tar/ditto flags in scripts/package-release.sh, all of which
+    # exist specifically to keep this build byte-for-byte reproducible.
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache the pinned Zig toolchain
+        id: zig-cache
+        uses: actions/cache@v4
+        with:
+          path: zig/zig-aarch64-macos-${{ env.ZIG_VERSION }}
+          key: zig-aarch64-macos-${{ env.ZIG_VERSION }}
+
+      - name: Install the pinned Zig toolchain
+        if: steps.zig-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p zig
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-aarch64-macos-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+          tar -xf zig.tar.xz -C zig
+          rm zig.tar.xz
+
+      - name: Package once
+        run: ./scripts/package-release.sh 0.0.0-repro-check dist1
+
+      - name: Clean every build artifact
+        run: rm -rf .zig-cache zig-out macos/.build
+
+      - name: Package again
+        run: ./scripts/package-release.sh 0.0.0-repro-check dist2
+
+      - name: Compare
+        run: |
+          diff <(cd dist1 && shasum -a 256 * | sort) <(cd dist2 && shasum -a 256 * | sort) \
+            && echo "reproducible: both packaging runs match byte for byte"

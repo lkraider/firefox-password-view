@@ -1,8 +1,10 @@
 cask "firefox-password-view" do
   version "1.0.0"
-  # TODO: replace once v1.0.0 is tagged and released; computed from the
-  # release asset with `shasum -a 256 FirefoxPasswordView-1.0.0-macos.zip`.
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  # The build is reproducible (see build.zig and scripts/package-release.sh),
+  # so this was computed locally with scripts/package-release.sh ahead of
+  # the actual v1.0.0 tag; ci.yml's reproducible-build job checks every
+  # push that this still holds.
+  sha256 "cf3e748670d11fbade1e35cf21209ef78e6f8e5b5186799dcd1920b6995a8f4a"
 
   url "https://github.com/lkraider/firefox-password-view/releases/download/v#{version}/FirefoxPasswordView-#{version}-macos.zip"
   name "Firefox Password View"
