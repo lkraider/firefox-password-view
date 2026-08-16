@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  ZIG_VERSION: "0.16.0"
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache the pinned Zig toolchain
+        id: zig-cache
+        uses: actions/cache@v4
+        with:
+          path: zig/zig-aarch64-macos-${{ env.ZIG_VERSION }}
+          key: zig-aarch64-macos-${{ env.ZIG_VERSION }}
+
+      - name: Install the pinned Zig toolchain
+        if: steps.zig-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p zig
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-aarch64-macos-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+          tar -xf zig.tar.xz -C zig
+          rm zig.tar.xz
+
+      - name: Build the Zig core and the TUI (release)
+        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build -Doptimize=ReleaseSafe
+
+      - name: Package the TUI binary
+        run: |
+          mkdir -p dist
+          tar -czf dist/ffpw-aarch64-macos.tar.gz -C zig-out/bin ffpw
+
+      - name: Bundle and package the macOS app
+        working-directory: macos
+        run: |
+          ./scripts/bundle.sh release
+          mkdir -p ../dist
+          version="${GITHUB_REF_NAME#v}"
+          ditto -c -k --sequesterRsrc --keepParent \
+            .build/release/FirefoxPasswordView.app \
+            "../dist/FirefoxPasswordView-${version}-macos.zip"
+
+      - name: Checksums
+        working-directory: dist
+        run: shasum -a 256 * | tee SHA256SUMS
+
+      - name: Create the GitHub release
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

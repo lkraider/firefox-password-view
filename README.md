@@ -32,6 +32,21 @@ One entry is special: a profile synced to a Mozilla Account carries a
 site password. Revealing it hands over the account, not one login. Both
 front ends label this row and ask for confirmation before revealing it.
 
+## Installing
+
+Precompiled for Apple Silicon macOS, via this repo's own Homebrew tap:
+
+```
+brew tap lkraider/firefox-password-view https://github.com/lkraider/firefox-password-view
+brew install ffpw                          # the terminal UI
+brew install --cask firefox-password-view  # the macOS app
+```
+
+The app is ad-hoc signed, not notarized: no Apple Developer ID exists for
+this project. On first launch, either right-click the app in Finder and
+choose Open, or run `xattr -cr` on it yourself, since Gatekeeper otherwise
+blocks it as coming from an unidentified developer.
+
 ## Building
 
 Needs [Zig 0.16.0](https://ziglang.org/download/#release-0.16.0) and Xcode
