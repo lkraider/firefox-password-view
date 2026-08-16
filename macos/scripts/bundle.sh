@@ -19,7 +19,12 @@ else
 fi
 (cd "$repo_root" && ./zig/zig-aarch64-macos-0.16.0/zig build -Doptimize="$zig_optimize")
 
-swift build -c "$config"
+# -gnone: without it, two clean rebuilds of identical source produce a
+# different binary (verified: swiftc/ld embeds something debug-info-derived
+# that varies build to build, the same class of issue -fstrip fixes on the
+# Zig side). With -gnone, two rebuilds are byte-identical, even after the
+# ad-hoc codesign below.
+swift build -c "$config" -Xswiftc -gnone
 
 app=".build/$config/FirefoxPasswordView.app"
 rm -rf "$app"
@@ -27,5 +32,10 @@ mkdir -p "$app/Contents/MacOS"
 cp ".build/$config/FirefoxPasswordView" "$app/Contents/MacOS/FirefoxPasswordView"
 cp "Info.plist" "$app/Contents/Info.plist"
 codesign --force --deep --sign - "$app"
+
+# A fixed mtime on every file, since the app's contents are already
+# byte-identical across rebuilds by this point: without this, a zip made
+# from this bundle would still vary run to run purely from timestamps.
+/usr/bin/find "$app" -exec touch -t 202601010000 {} +
 
 echo "$app"

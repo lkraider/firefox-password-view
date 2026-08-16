@@ -37,7 +37,13 @@ jobs:
       - name: Package the TUI binary
         run: |
           mkdir -p dist
-          tar -czf dist/ffpw-aarch64-macos.tar.gz -C zig-out/bin ffpw
+          # Plain `tar -czf` embeds gzip's own compress-time timestamp, so
+          # the tarball differs byte for byte between two builds of an
+          # identical binary. `tar` with normalized ownership, piped through
+          # `gzip -n` (no name/timestamp in the gzip header), doesn't;
+          # verified locally: two such tarballs of the same input match.
+          touch -t 202601010000 zig-out/bin/ffpw
+          tar --numeric-owner --uid 0 --gid 0 -cf - -C zig-out/bin ffpw | gzip -n -9 > dist/ffpw-aarch64-macos.tar.gz
 
       - name: Bundle and package the macOS app
         working-directory: macos
@@ -45,7 +51,11 @@ jobs:
           ./scripts/bundle.sh release
           mkdir -p ../dist
           version="${GITHUB_REF_NAME#v}"
-          ditto -c -k --sequesterRsrc --keepParent \
+          # No --sequesterRsrc: it moves resource-fork/metadata sidecar
+          # files into a __MACOSX/ directory whose own entries ditto stamps
+          # with the current wall-clock time rather than the source files',
+          # which this app has no need to preserve anyway.
+          ditto -c -k --keepParent \
             .build/release/FirefoxPasswordView.app \
             "../dist/FirefoxPasswordView-${version}-macos.zip"
 

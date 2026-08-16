@@ -4,6 +4,15 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Without this, two clean rebuilds of the same source on the same
+    // machine produce different bytes: Zig's macOS linker embeds an LC_UUID
+    // (and a code-signature hash that covers it) derived from debug info
+    // that isn't otherwise deterministic. Stripping it removes the only
+    // source of that variance; verified by rebuilding ffpw twice and
+    // diffing (zero bytes differ once stripped, same output filename).
+    // Debug keeps its symbols, since that's the build meant for debugging.
+    const strip = optimize != .Debug;
+
     // @cImport is deprecated in 0.16; C translation belongs to the build system.
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.path("core/src/c.h"),
@@ -56,6 +65,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("tui/src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .strip = strip,
         .link_libc = true,
         .imports = &.{
             .{ .name = "core", .module = core_mod },
@@ -89,6 +99,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("core/src/core.zig"),
         .target = target,
         .optimize = optimize,
+        .strip = strip,
         .link_libc = true,
         .imports = &.{.{ .name = "c", .module = lib_translate_c.createModule() }},
     });
