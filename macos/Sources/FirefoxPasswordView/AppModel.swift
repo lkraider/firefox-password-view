@@ -15,13 +15,10 @@ final class AppModel {
     /// no per-row loading state.
     private(set) var entries: [Entry] = []
 
-    var searchText: String = "" {
-        didSet {
-            searchTask?.cancel()
-            searchTask = Task { await runSearch() }
-        }
-    }
-    private var searchTask: Task<Void, Never>?
+    /// ContentView drives runSearch from a `.task(id: searchText)`, which
+    /// cancels the in-flight search and starts a new one whenever this
+    /// changes, so nothing here needs to track or cancel a Task by hand.
+    var searchText: String = ""
 
     private(set) var needsPassword = false
     var passwordInput = ""
@@ -100,10 +97,11 @@ final class AppModel {
         await runSearch()
     }
 
-    /// A search superseded by a newer keystroke must not overwrite the
-    /// newer one's results if it happens to finish later, so this is
-    /// followed by a check.
-    private func runSearch() async {
+    /// Called by `loadEntries` directly and by ContentView's
+    /// `.task(id: searchText)` on every keystroke. A search superseded by a
+    /// newer keystroke must not overwrite the newer one's results if it
+    /// happens to finish later, so this is followed by a check.
+    func runSearch() async {
         let indices = await store.search(searchText)
         guard !Task.isCancelled else { return }
         matchedIndices = indices

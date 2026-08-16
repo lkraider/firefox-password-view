@@ -15,6 +15,15 @@ struct ContentView: View {
                 }
                 .overlay { LoadingIndicator(model: model) }
                 .safeAreaInset(edge: .bottom) { StatusBar(model: model) }
+                // Cancels the in-flight search and starts a new one whenever
+                // searchText changes, replacing a hand-rolled Task/cancel
+                // pair with the same behavior SwiftUI already provides.
+                // ContentView already reads searchText via .searchable's
+                // binding above, so this adds no new tracked dependency;
+                // attaching it to EntryListView instead would make that view
+                // (and its NSTableView) re-render on every keystroke, which
+                // the matchedIndices-only split above exists to avoid.
+                .task(id: model.searchText) { await model.runSearch() }
         }
         .sheet(isPresented: Binding(get: { model.needsPassword }, set: { _ in })) {
             PrimaryPasswordSheet(model: model)
