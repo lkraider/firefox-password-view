@@ -88,5 +88,9 @@ jobs:
 
       - name: Compare
         run: |
+          echo "--- run 1 ---"
+          (cd dist1 && shasum -a 256 * | sort)
+          echo "--- run 2 ---"
+          (cd dist2 && shasum -a 256 * | sort)
           diff <(cd dist1 && shasum -a 256 * | sort) <(cd dist2 && shasum -a 256 * | sort) \
             && echo "reproducible: both packaging runs match byte for byte"
