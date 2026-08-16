@@ -1,7 +1,17 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+    // Pinned to a CPU baseline after resolving, not by passing an explicit
+    // default_target: an explicit query (even one that otherwise matches
+    // the host) skips the native-SDK auto-detection standardTargetOptions
+    // does for an empty query, and sqlite3 fails to link without it (see
+    // core_lib_mod below, which hit this same issue for a different
+    // reason). Left at "native", two machines with different Apple Silicon
+    // generations resolve to a different cpu.model (verified: this
+    // machine's M1 resolves to apple_m1), so Zig picks different codegen
+    // for the same source and produces a different binary.
+    var target = b.standardTargetOptions(.{});
+    target.result.cpu = std.Target.Cpu.baseline(target.result.cpu.arch, target.result.os);
     const optimize = b.standardOptimizeOption(.{});
 
     // Without this, two clean rebuilds of the same source on the same
