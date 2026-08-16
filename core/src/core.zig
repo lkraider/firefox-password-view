@@ -48,9 +48,27 @@ const CStore = struct {
 /// the store's own arena allocations without corrupting anything.
 const gpa = std.heap.c_allocator;
 
+/// ffpw_open's first attempt always uses an empty password, so a
+/// WrongPassword there means "this profile needs a real one", not that a
+/// caller-supplied password was wrong.
 fn mapOpenError(err: anyerror) ffpw_status {
     return switch (err) {
         error.WrongPassword => .err_needs_password,
+        else => mapCommonError(err),
+    };
+}
+
+/// ffpw_unlock's password came from the caller, so WrongPassword here means
+/// exactly that, not that a password is merely needed.
+fn mapUnlockError(err: anyerror) ffpw_status {
+    return switch (err) {
+        error.WrongPassword => .err_wrong_password,
+        else => mapCommonError(err),
+    };
+}
+
+fn mapCommonError(err: anyerror) ffpw_status {
+    return switch (err) {
         error.OpenFailed => .err_no_profile,
         error.OutOfMemory => .err_oom,
         error.MissingPasswordRow, error.QueryFailed, error.NoSdrKey, error.NoLoginsArray => .err_open,
@@ -164,7 +182,7 @@ export fn ffpw_unlock(handle: ?*CStore, pw: ?[*]const u8, pw_len: usize) callcon
     if (cstore.store != null) return .ok;
     const password = if (pw) |p| p[0..pw_len] else "";
     const io = cstore.threaded.io();
-    const opened = store_mod.Store.open(cstore.gpa, io, cstore.profile_path, password) catch |err| return mapOpenError(err);
+    const opened = store_mod.Store.open(cstore.gpa, io, cstore.profile_path, password) catch |err| return mapUnlockError(err);
     cstore.store = opened;
     return .ok;
 }
