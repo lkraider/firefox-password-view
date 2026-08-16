@@ -20,8 +20,9 @@ kinds:     1 account credential, 4 extension
 Section 3, "Sync deletion tombstones and two non-web schemes", explains why
 the login total is 1701 rather than the 1703 rows `logins.json` holds.
 
-Front ends are not started. Everything in sections 3 and 4 was measured on that
-profile, not inferred from other projects.
+The TUI and the SwiftUI app are both built on top of this core; see the
+plan's milestones for each. Everything in sections 3 and 4 was measured on
+that profile, not inferred from other projects.
 
 Verified environment: Firefox 152.0.6, macOS 15.7.7 arm64, Zig 0.16.0.
 
@@ -150,16 +151,17 @@ core/src/
   keydb.zig      reads key4.db, returns the master keys
   logins.zig     decrypts and classifies logins.json entries
   store.zig      owns the arena, the keys, the entries, and the search filter
+  core.zig       exports the C ABI both front ends link, core/include/ffpw.h
+  root.zig       the module boundary a front end imports through
   main.zig       validation probe
   c.h            sqlite3 and stdlib headers for addTranslateC
   tests.zig      NIST and DER vectors, and fixture round-trips
 build.zig
+tui/src/        the libvaxis TUI, imports store.zig through root.zig
+macos/          the SwiftUI app, a Swift package linking core.zig's static library
 ```
 
 `des.zig` from the v1 plan is not built.
-
-Still to write: `core.zig`, the exported C ABI that both front ends link. It
-needs open, unlock, list, reveal one entry, and wipe a returned buffer.
 
 ## 7. Front ends
 
@@ -211,19 +213,21 @@ TCC-protected, so no permission prompt appears.
 - Firefox changed this format in October 2025. Cipher selection reads the OID
   from the file, so a further change surfaces as an explicit unsupported-cipher
   error.
-- A profile Firefox has open may carry `key4.db-wal`. The read-only path has not
-  been tested in that state.
+- Tested against the real profile with Firefox 152.0.6 open and its
+  `.parentlock` held: the probe still reads and decrypts correctly, 1701
+  total and 1701 decrypted, matching a closed-Firefox run. No `key4.db-wal`
+  appeared during that session; NSS did not hold one open while idle. A
+  read landing mid-write, while a WAL file exists, is still unverified,
+  since producing that state on demand isn't possible without triggering a
+  real write to the owner's profile.
 
 ## 11. Next steps
 
-1. Export the C ABI from `core.zig` and wipe returned buffers on release.
-2. Build the TUI on libvaxis with incremental search, masked rows, reveal and
-   copy.
-3. Test against a profile that has Firefox open.
-4. Add the Primary Password prompt path; the test profile has none, so that
-   branch is unexercised.
-5. Vendor the SQLite amalgamation before targeting Windows.
-6. Build the SwiftUI shell.
+The C ABI, the TUI, the Primary Password prompt, and the SwiftUI shell are
+built; see the plan's milestones for what each covers and how it was
+verified. What is left here:
+
+1. Vendor the SQLite amalgamation before targeting Windows.
 
 ## 12. Prior art
 
