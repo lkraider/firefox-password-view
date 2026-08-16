@@ -44,9 +44,16 @@ Precompiled for Apple Silicon macOS, via this repo's own Homebrew tap:
 
 ```
 brew tap lkraider/firefox-password-view https://github.com/lkraider/firefox-password-view
+brew trust lkraider/firefox-password-view  # Homebrew 6.0 and newer
 brew install ffpw                          # the terminal UI
 brew install --cask firefox-password-view  # the macOS app
 ```
+
+Homebrew 6.0 refuses to load a formula or a cask from an unofficial tap
+until you trust that tap. Skipping `brew trust` gives "Refusing to load
+formula ... from untrusted tap". Trusting the tap once covers both the
+formula and the cask. Verified on Homebrew 6.0.17. If `brew trust`
+reports an unknown command, your Homebrew installs without that line.
 
 The app is ad-hoc signed. This project has no Apple Developer ID, so it is
 not notarized. On first launch, right-click the app in Finder and choose
