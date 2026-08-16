@@ -60,7 +60,7 @@ final class AppModel {
         let (needsPw, error) = await store.open(profilePath: profile.path)
         needsPassword = needsPw
         if let error {
-            statusMessage = "Could not open profile: \(error)"
+            statusMessage = error.localizedDescription
             return
         }
         if !needsPw {
@@ -72,7 +72,7 @@ final class AppModel {
         passwordError = false
         if let error = await store.unlock(password: passwordInput) {
             passwordError = true
-            statusMessage = "\(error)"
+            statusMessage = error.localizedDescription
             return
         }
         needsPassword = false
@@ -116,7 +116,7 @@ final class AppModel {
             revealedIndex = index
             revealedSecret = secret
         case .failure(let error):
-            statusMessage = "\(error)"
+            statusMessage = error.localizedDescription
         }
     }
 

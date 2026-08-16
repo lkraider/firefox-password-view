@@ -27,6 +27,22 @@ enum FFPWError: Error, Sendable, Equatable {
     }
 }
 
+extension FFPWError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .noProfile: "No Firefox profile was found at that path."
+        case .openFailed: "Could not open key4.db for this profile."
+        case .needsPassword: "This profile needs its Primary Password."
+        case .wrongPassword: "Wrong Primary Password. Try again."
+        case .legacy3DES: "This entry is still 3DES, which this app cannot decrypt."
+        case .outOfMemory: "Out of memory."
+        case .io: "Could not read this profile's files."
+        case .range: "That entry does not exist."
+        case .unknown(let code): "Unexpected error (\(code))."
+        }
+    }
+}
+
 /// Wraps one ffpw_store. Every method here is actor-isolated, so Swift
 /// itself serializes every call onto the store, matching the header's rule:
 /// one ffpw_store belongs to one thread at a time. Loading and decrypting

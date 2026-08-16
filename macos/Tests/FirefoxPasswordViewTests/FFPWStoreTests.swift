@@ -101,4 +101,18 @@ struct FFPWStoreTests {
         #expect(extensionCount == 1)
         await store.close()
     }
+
+    @Test func everyFFPWErrorCaseHasItsOwnMessage() {
+        let cases: [FFPWError] = [
+            .noProfile, .openFailed, .needsPassword, .wrongPassword,
+            .legacy3DES, .outOfMemory, .io, .range, .unknown(99),
+        ]
+        var seen = Set<String>()
+        for error in cases {
+            let message = error.localizedDescription
+            #expect(!message.isEmpty, "\(error) has no message")
+            #expect(!seen.contains(message), "\(error) shares a message with another case")
+            seen.insert(message)
+        }
+    }
 }
