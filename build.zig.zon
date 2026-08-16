@@ -1,0 +1,12 @@
+.{
+    .name = .firefox_password_view,
+    .version = "0.16.0",
+    .dependencies = .{
+        .libvaxis = .{
+            .url = "git+https://github.com/rockorager/libvaxis#6cab03f8a3faeb58bddf334343889a7f685ba7a7",
+            .hash = "vaxis-0.6.0-BWNV_FcoCgB3Q_LTiQet_GeS23Bd7e224eHloS8PanKZ",
+        },
+    },
+    .paths = .{""},
+    .fingerprint = 0xb40f3241b70186c3,
+}
