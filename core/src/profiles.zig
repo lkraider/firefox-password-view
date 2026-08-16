@@ -4,19 +4,22 @@ const std = @import("std");
 
 pub const Error = error{NoProfileFound} || std.mem.Allocator.Error;
 
-/// Returns the absolute profile directory. Caller owns the memory.
-///
-/// Since Firefox 67 the `[InstallXXXX]` section names the profile for a given
-/// installation and `Default=1` under `[ProfileN]` is only the pre-67 fallback.
-/// Reading `Default=1` first selects an abandoned profile on machines that have
-/// one.
-pub fn resolveDefault(gpa: std.mem.Allocator, firefox_dir: []const u8, ini: []const u8) Error![]u8 {
-    var install_path: ?[]const u8 = null;
-    var legacy_path: ?[]const u8 = null;
+const KeyValue = struct { key: []const u8, value: []const u8 };
+const Section = struct { name: []const u8, fields: []const KeyValue };
 
-    var section: []const u8 = "";
-    var current_path: ?[]const u8 = null;
-    var current_default = false;
+/// Splits `ini` into sections, in file order. Every string in the result
+/// points into `ini`; nothing here is duplicated. The caller frees each
+/// section's `fields` and the returned slice, both with `gpa`.
+fn parseSections(gpa: std.mem.Allocator, ini: []const u8) std.mem.Allocator.Error![]Section {
+    var sections: std.ArrayList(Section) = .empty;
+    errdefer {
+        for (sections.items) |s| gpa.free(s.fields);
+        sections.deinit(gpa);
+    }
+
+    var name: []const u8 = "";
+    var fields: std.ArrayList(KeyValue) = .empty;
+    errdefer fields.deinit(gpa);
 
     var lines = std.mem.splitScalar(u8, ini, '\n');
     while (lines.next()) |raw| {
@@ -24,33 +27,65 @@ pub fn resolveDefault(gpa: std.mem.Allocator, firefox_dir: []const u8, ini: []co
         if (line.len == 0) continue;
 
         if (line[0] == '[') {
-            if (std.mem.startsWith(u8, section, "Profile") and current_default) {
-                if (current_path) |p| legacy_path = p;
-            }
-            section = std.mem.trim(u8, line[1 .. line.len - 1], "]");
-            current_path = null;
-            current_default = false;
+            try sections.append(gpa, .{ .name = name, .fields = try fields.toOwnedSlice(gpa) });
+            name = std.mem.trim(u8, line[1 .. line.len - 1], "]");
             continue;
         }
 
         const eq = std.mem.indexOfScalar(u8, line, '=') orelse continue;
-        const key = std.mem.trim(u8, line[0..eq], " \t");
-        const value = std.mem.trim(u8, line[eq + 1 ..], " \t");
-
-        if (std.mem.startsWith(u8, section, "Install")) {
-            if (std.mem.eql(u8, key, "Default")) install_path = value;
-        } else if (std.mem.startsWith(u8, section, "Profile")) {
-            if (std.mem.eql(u8, key, "Path")) current_path = value;
-            if (std.mem.eql(u8, key, "Default") and std.mem.eql(u8, value, "1")) current_default = true;
-        }
+        try fields.append(gpa, .{
+            .key = std.mem.trim(u8, line[0..eq], " \t"),
+            .value = std.mem.trim(u8, line[eq + 1 ..], " \t"),
+        });
     }
-    if (std.mem.startsWith(u8, section, "Profile") and current_default) {
-        if (current_path) |p| legacy_path = p;
+    try sections.append(gpa, .{ .name = name, .fields = try fields.toOwnedSlice(gpa) });
+
+    return sections.toOwnedSlice(gpa);
+}
+
+fn freeSections(gpa: std.mem.Allocator, sections: []const Section) void {
+    for (sections) |s| gpa.free(s.fields);
+    gpa.free(sections);
+}
+
+fn resolvePath(gpa: std.mem.Allocator, firefox_dir: []const u8, rel: []const u8) std.mem.Allocator.Error![]u8 {
+    if (rel.len > 0 and rel[0] == '/') return gpa.dupe(u8, rel);
+    return std.fs.path.join(gpa, &.{ firefox_dir, rel });
+}
+
+/// Returns the absolute profile directory. Caller owns the memory.
+///
+/// Since Firefox 67 the `[InstallXXXX]` section names the profile for a given
+/// installation and `Default=1` under `[ProfileN]` is only the pre-67 fallback.
+/// Reading `Default=1` first selects an abandoned profile on machines that have
+/// one.
+pub fn resolveDefault(gpa: std.mem.Allocator, firefox_dir: []const u8, ini: []const u8) Error![]u8 {
+    const sections = try parseSections(gpa, ini);
+    defer freeSections(gpa, sections);
+
+    var install_path: ?[]const u8 = null;
+    var legacy_path: ?[]const u8 = null;
+
+    for (sections) |s| {
+        if (std.mem.startsWith(u8, s.name, "Install")) {
+            for (s.fields) |f| {
+                if (std.mem.eql(u8, f.key, "Default")) install_path = f.value;
+            }
+        } else if (std.mem.startsWith(u8, s.name, "Profile")) {
+            var path: ?[]const u8 = null;
+            var is_default = false;
+            for (s.fields) |f| {
+                if (std.mem.eql(u8, f.key, "Path")) path = f.value;
+                if (std.mem.eql(u8, f.key, "Default") and std.mem.eql(u8, f.value, "1")) is_default = true;
+            }
+            if (is_default) {
+                if (path) |p| legacy_path = p;
+            }
+        }
     }
 
     const rel = install_path orelse legacy_path orelse return error.NoProfileFound;
-    if (rel.len > 0 and rel[0] == '/') return gpa.dupe(u8, rel);
-    return std.fs.path.join(gpa, &.{ firefox_dir, rel });
+    return resolvePath(gpa, firefox_dir, rel);
 }
 
 pub const Profile = struct {
@@ -60,16 +95,14 @@ pub const Profile = struct {
     path: []const u8,
 };
 
-fn resolvePath(gpa: std.mem.Allocator, firefox_dir: []const u8, rel: []const u8) std.mem.Allocator.Error![]u8 {
-    if (rel.len > 0 and rel[0] == '/') return gpa.dupe(u8, rel);
-    return std.fs.path.join(gpa, &.{ firefox_dir, rel });
-}
-
 /// Every `[ProfileN]` section in profiles.ini, in file order. A test machine
 /// can carry a profile with no key4.db at all (an abandoned pre-migration
 /// profile), so a viewer that only ever opens `resolveDefault`'s pick cannot
 /// explain what it is showing; this lets a front end offer the rest.
 pub fn enumerate(gpa: std.mem.Allocator, firefox_dir: []const u8, ini: []const u8) std.mem.Allocator.Error![]Profile {
+    const sections = try parseSections(gpa, ini);
+    defer freeSections(gpa, sections);
+
     var profiles: std.ArrayList(Profile) = .empty;
     errdefer {
         for (profiles.items) |p| {
@@ -79,46 +112,19 @@ pub fn enumerate(gpa: std.mem.Allocator, firefox_dir: []const u8, ini: []const u
         profiles.deinit(gpa);
     }
 
-    var section: []const u8 = "";
-    var current_name: []const u8 = "";
-    var current_path: ?[]const u8 = null;
-
-    var lines = std.mem.splitScalar(u8, ini, '\n');
-    while (lines.next()) |raw| {
-        const line = std.mem.trim(u8, raw, " \t\r");
-        if (line.len == 0) continue;
-
-        if (line[0] == '[') {
-            if (std.mem.startsWith(u8, section, "Profile")) {
-                if (current_path) |p| {
-                    try profiles.append(gpa, .{
-                        .name = try gpa.dupe(u8, current_name),
-                        .path = try resolvePath(gpa, firefox_dir, p),
-                    });
-                }
-            }
-            section = std.mem.trim(u8, line[1 .. line.len - 1], "]");
-            current_name = "";
-            current_path = null;
-            continue;
+    for (sections) |s| {
+        if (!std.mem.startsWith(u8, s.name, "Profile")) continue;
+        var name: []const u8 = "";
+        var path: ?[]const u8 = null;
+        for (s.fields) |f| {
+            if (std.mem.eql(u8, f.key, "Name")) name = f.value;
+            if (std.mem.eql(u8, f.key, "Path")) path = f.value;
         }
-
-        const eq = std.mem.indexOfScalar(u8, line, '=') orelse continue;
-        const key = std.mem.trim(u8, line[0..eq], " \t");
-        const value = std.mem.trim(u8, line[eq + 1 ..], " \t");
-
-        if (std.mem.startsWith(u8, section, "Profile")) {
-            if (std.mem.eql(u8, key, "Name")) current_name = value;
-            if (std.mem.eql(u8, key, "Path")) current_path = value;
-        }
-    }
-    if (std.mem.startsWith(u8, section, "Profile")) {
-        if (current_path) |p| {
-            try profiles.append(gpa, .{
-                .name = try gpa.dupe(u8, current_name),
-                .path = try resolvePath(gpa, firefox_dir, p),
-            });
-        }
+        const p = path orelse continue;
+        try profiles.append(gpa, .{
+            .name = try gpa.dupe(u8, name),
+            .path = try resolvePath(gpa, firefox_dir, p),
+        });
     }
 
     return profiles.toOwnedSlice(gpa);
