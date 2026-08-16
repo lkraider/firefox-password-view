@@ -34,11 +34,8 @@ final class AppModel {
     func start() async {
         profiles = listProfiles()
         for profile in profiles {
-            let (needsPw, error) = await store.open(profilePath: profile.path)
-            if error == nil {
+            if await attemptOpen(profile) == nil {
                 selectedProfile = profile
-                needsPassword = needsPw
-                if !needsPw { await loadEntries() }
                 return
             }
             await store.close()
@@ -57,15 +54,22 @@ final class AppModel {
         passwordInput = ""
         passwordError = false
 
+        if let error = await attemptOpen(profile) {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    /// Opens `profile`, updates `needsPassword`, and loads its entries if it
+    /// needs no password. Returns the error on failure, so `start()` can try
+    /// the next profile silently while `selectProfile()` shows it directly.
+    private func attemptOpen(_ profile: Profile) async -> FFPWError? {
         let (needsPw, error) = await store.open(profilePath: profile.path)
         needsPassword = needsPw
-        if let error {
-            statusMessage = error.localizedDescription
-            return
-        }
+        if let error { return error }
         if !needsPw {
             await loadEntries()
         }
+        return nil
     }
 
     func submitPassword() async {
