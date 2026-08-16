@@ -1,5 +1,7 @@
 # Firefox Password View
 
+[![CI](https://github.com/lkraider/firefox-password-view/actions/workflows/ci.yml/badge.svg)](https://github.com/lkraider/firefox-password-view/actions/workflows/ci.yml)
+
 Reads a local Firefox profile's saved logins and shows them to the profile
 owner: a terminal UI and a macOS app, both built on the same Zig core.
 Apple Silicon macOS only, for now.

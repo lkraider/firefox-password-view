@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  ZIG_VERSION: "0.16.0"
+
+jobs:
+  build-and-test:
+    # Only a macOS runner can link libsqlite3 through the macOS SDK stub;
+    # see docs/DESIGN.md's Build and platform notes.
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache the pinned Zig toolchain
+        id: zig-cache
+        uses: actions/cache@v4
+        with:
+          path: zig/zig-aarch64-macos-${{ env.ZIG_VERSION }}
+          key: zig-aarch64-macos-${{ env.ZIG_VERSION }}
+
+      - name: Install the pinned Zig toolchain
+        if: steps.zig-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p zig
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-aarch64-macos-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+          tar -xf zig.tar.xz -C zig
+          rm zig.tar.xz
+
+      - name: zig build test
+        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build test
+
+      - name: zig build smoke
+        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build smoke
+
+      - name: Build the Zig core (release, for the macOS app to link)
+        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build -Doptimize=ReleaseSafe
+
+      - name: swift test
+        working-directory: macos
+        run: swift test -Xswiftc -F -Xswiftc /Library/Developer/CommandLineTools/Library/Developer/Frameworks
+
+      - name: Bundle the macOS app (release)
+        working-directory: macos
+        run: ./scripts/bundle.sh
