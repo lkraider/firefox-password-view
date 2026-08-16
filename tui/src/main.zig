@@ -452,13 +452,7 @@ const Model = struct {
             .surface = try self.status_line.draw(ctx.withConstraints(ctx.min, .{ .width = max.width, .height = 1 })),
         };
 
-        const children = try ctx.arena.alloc(vxfw.SubSurface, 4);
-        children[0] = list_surface;
-        children[1] = search_surface;
-        children[2] = prompt_surface;
-        children[3] = status_surface;
-
-        return .{ .size = max, .widget = self.widget(), .buffer = &.{}, .children = children };
+        return self.composite(ctx, max, &.{ list_surface, search_surface, prompt_surface, status_surface });
     }
 
     fn drawOpenError(self: *Model, ctx: vxfw.DrawContext, max: vxfw.Size) !vxfw.Surface {
@@ -472,10 +466,7 @@ const Model = struct {
             .origin = .{ .row = 4, .col = 0 },
             .surface = try hint.draw(ctx.withConstraints(ctx.min, .{ .width = max.width, .height = 1 })),
         };
-        const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
-        children[0] = label_surface;
-        children[1] = hint_surface;
-        return .{ .size = max, .widget = self.widget(), .buffer = &.{}, .children = children };
+        return self.composite(ctx, max, &.{ label_surface, hint_surface });
     }
 
     fn drawPasswordPrompt(self: *Model, ctx: vxfw.DrawContext, max: vxfw.Size) !vxfw.Surface {
@@ -494,10 +485,18 @@ const Model = struct {
             .origin = .{ .row = 2, .col = 0 },
             .surface = try self.password_field.widget().draw(ctx.withConstraints(ctx.min, .{ .width = max.width, .height = 1 })),
         };
-        const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
-        children[0] = label_surface;
-        children[1] = field_surface;
-        return .{ .size = max, .widget = self.widget(), .buffer = &.{}, .children = children };
+        return self.composite(ctx, max, &.{ label_surface, field_surface });
+    }
+
+    /// Every screen is one Surface holding a fixed set of already-drawn
+    /// children; this is the one place that assembles it.
+    fn composite(self: *Model, ctx: vxfw.DrawContext, size: vxfw.Size, children: []const vxfw.SubSurface) !vxfw.Surface {
+        return .{
+            .size = size,
+            .widget = self.widget(),
+            .buffer = &.{},
+            .children = try ctx.arena.dupe(vxfw.SubSurface, children),
+        };
     }
 };
 
