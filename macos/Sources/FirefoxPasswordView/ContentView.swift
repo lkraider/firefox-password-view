@@ -124,10 +124,12 @@ private struct EntryRow: View {
                             }
                             Text(entry.hostname)
                                 .font(.headline)
+                                .lineLimit(1)
                         }
                         Text(entry.username)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                         Group {
                             if isRevealed {
                                 Text(model.revealedValue ?? "").textSelection(.enabled)
@@ -136,6 +138,7 @@ private struct EntryRow: View {
                             }
                         }
                         .font(.system(.body, design: .monospaced))
+                        .lineLimit(1)
                     }
                     Spacer()
                     if isRevealed {
@@ -146,6 +149,12 @@ private struct EntryRow: View {
                         .help("Copy password")
                     }
                 }
+                // A fixed height, paired with lineLimit(1) on every line
+                // above, lets List's NSTableView backing use a uniform row
+                // height instead of measuring each row's SwiftUI content as
+                // it scrolls into view, which is what was stuttering on a
+                // fast scroll over 1701 rows.
+                .frame(height: 56)
                 .contentShape(Rectangle())
                 .onTapGesture { Task { await model.toggleReveal(index) } }
             } else {
