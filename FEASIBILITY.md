@@ -8,12 +8,17 @@ The decryption core is built and verified against a live profile. `zig build
 run` reports:
 
 ```
+profiles:  2 found
 profile:   ~/Library/Application Support/Firefox/Profiles/cbl1mroj.default-release
 password-check verified with an empty Primary Password
 aes256 key: present (32 bytes)
 3des key:   present (24 bytes)
-logins:    1703 total, 1701 decrypted, 2 incomplete, 0 legacy 3des, 0 failed
+logins:    1701 total, 1701 decrypted, 0 legacy 3des, 2 tombstones skipped, 0 malformed
+kinds:     1 account credential, 4 extension
 ```
+
+Section 3, "Sync deletion tombstones and two non-web schemes", explains why
+the login total is 1701 rather than the 1703 rows `logins.json` holds.
 
 Front ends are not started. Everything in sections 3 and 4 was measured on that
 profile, not inferred from other projects.
@@ -74,6 +79,25 @@ machine `Default=1` sits on a profile that contains no `key4.db`, and the real
 profile is named only by the install section. Resolution reads the install
 section first.
 
+### Sync deletion tombstones and two non-web schemes
+
+The test profile syncs to a Mozilla Account. Encryption is unaffected, but the
+data model is not.
+
+2 records in `logins.json` carry `{deleted: true, everSynced, guid, id,
+syncCounter, timePasswordChanged}` and no hostname and no encrypted fields.
+These are deletions still held for propagation to other devices, not entries
+missing data; the store filters them before counting rather than reporting
+them as failures.
+
+One entry has `hostname = chrome://FirefoxAccounts` and
+`httpRealm = Firefox Accounts credentials`. Its username is the Mozilla
+Account email and its decrypted password is a JSON document holding sync key
+material, so revealing it hands over the account rather than one site
+password. The store labels this row `account_credential` rather than
+`normal`. 4 entries carry a `moz-extension://` origin and are labelled
+`extension`; hostname parsing must not assume `http` or `https`.
+
 ## 4. The decryption chain
 
 Both layers use PBKDF2 and AES-256-CBC. They differ in how the IV is carried.
@@ -122,12 +146,13 @@ core/src/
   aescbc.zig     AES-256-CBC over std.crypto.core.aes, PKCS7
   pbes2.zig      unwraps key4.db values
   sdr.zig        parses logins.json blobs
-  profiles.zig   resolves the default profile
+  profiles.zig   resolves and enumerates profiles
   keydb.zig      reads key4.db, returns the master keys
-  logins.zig     decrypts logins.json
+  logins.zig     decrypts and classifies logins.json entries
+  store.zig      owns the arena, the keys, the entries, and the search filter
   main.zig       validation probe
   c.h            sqlite3 and stdlib headers for addTranslateC
-  tests.zig      NIST and DER vectors
+  tests.zig      NIST and DER vectors, and fixture round-trips
 build.zig
 ```
 
@@ -139,7 +164,7 @@ needs open, unlock, list, reveal one entry, and wipe a returned buffer.
 ## 7. Front ends
 
 **TUI** on `libvaxis` (Zig 0.16, `vxfw` framework, macOS/Linux/Windows). The list
-holds 1703 entries on the test profile, so incremental search over hostname and
+holds 1701 entries on the test profile, so incremental search over hostname and
 username is required rather than optional.
 
 **SwiftUI** on macOS links the same static library through a bridging header.
