@@ -19,6 +19,26 @@ raw `-L`/`-l` flag, outside SwiftPM's own dependency graph), so it will not
 relink after a Zig-side change on its own. Run `rm -rf macos/.build` before
 `swift build` any time `libffpw.a` changes.
 
+## Running
+
+`swift build`'s output is a plain executable, not a `.app` bundle. Running
+it directly (`.build/debug/FirefoxPasswordView`) launches it outside
+LaunchServices, so the window opens but cannot take keyboard focus from the
+terminal. Use `scripts/bundle.sh` to wrap it in a minimal ad-hoc-signed
+bundle instead, and launch that with `open`:
+
+```
+scripts/bundle.sh          # builds core and app in release, produces .build/release/FirefoxPasswordView.app
+open .build/release/FirefoxPasswordView.app
+```
+
+`scripts/bundle.sh` builds release by default: it builds the Zig core with
+`-Doptimize=ReleaseSafe` and the app with `swift build -c release`. A Debug
+build of either disables enough optimization (Zig's inlining, Swift's
+whole-module optimization) to make filtering and reveal feel sluggish, so
+Debug is not representative of how the app actually performs. Pass `debug`
+for a fast dev rebuild instead: `scripts/bundle.sh debug`.
+
 ## Testing
 
 Only Command Line Tools is installed, and `swift-testing`'s runtime lives
