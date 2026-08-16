@@ -17,7 +17,7 @@ decrypted: a profile Firefox 144 or newer has never opened carries only
 **Protects against:** passwords written to disk, terminal scrollback, and
 clipboard history managers. Revealing a password shows exactly one at a
 time; copying marks the clipboard entry `org.nspasteboard.ConcealedType`
-and clears it after 30 seconds.
+and clears it after 30 seconds. No network calls and no telemetry.
 
 **Does not protect against:** anyone who can already read this user's
 memory or files. `key4.db` is readable by that user already, so this tool
@@ -57,14 +57,15 @@ macos/      the SwiftUI app, a Swift package linking core's static library
 tools/      tools/mkfixtures.py, the fixture generator
 ```
 
-`FEASIBILITY.md` has the byte-level format details, verified against a
-live profile, and the reasoning behind each implementation decision.
+[`docs/DESIGN.md`](docs/DESIGN.md) has the byte-level format details,
+verified against a live profile, and the reasoning behind each
+implementation decision.
 
 ## Status
 
-Milestones 0 through 5 of the implementation plan are complete: the
-decryption core, both front ends, the C ABI, and the fixture and fuzz test
-suites. See `FEASIBILITY.md` for what has been measured and where.
+The decryption core, both front ends, the C ABI, and the fixture and fuzz
+test suites are built and verified against a live profile. See
+[`docs/DESIGN.md`](docs/DESIGN.md) for what has been measured and where.
 
 ## License
 

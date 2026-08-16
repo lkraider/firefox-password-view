@@ -13,7 +13,7 @@ pub const Entry = struct {
     hostname: []const u8,
     /// Decrypted at load, since the list shows it. Empty when `legacy_3des`
     /// is true: the username is undecryptable without a 3DES implementation,
-    /// which this project does not carry (see FEASIBILITY.md section 5).
+    /// which this project does not carry (see docs/DESIGN.md, "Decisions").
     username: []const u8,
     kind: Kind,
     /// True when this entry's fields are still des_ede3_cbc, meaning
