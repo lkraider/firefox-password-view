@@ -1,29 +1,29 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    // Pinned to a CPU baseline after resolving, not by passing an explicit
-    // default_target: an explicit query (even one that otherwise matches
-    // the host) skips the native-SDK auto-detection standardTargetOptions
-    // does for an empty query, and sqlite3 fails to link without it (see
-    // core_lib_mod below, which hit this same issue for a different
-    // reason). Left at "native", two machines with different Apple Silicon
-    // generations resolve to a different cpu.model (verified: this
-    // machine's M1 resolves to apple_m1), so Zig picks different codegen
+    // b.standardTargetOptions resolves the target here, then the line
+    // below pins its cpu to a baseline. Passing an explicit default_target
+    // instead skips the native-SDK auto-detection standardTargetOptions
+    // runs for an empty query. sqlite3 needs that auto-detection to link.
+    // core_lib_mod below hits the same link failure, for a different
+    // reason. Left at "native", two machines with different Apple Silicon
+    // generations resolve to a different cpu.model. Verified: this
+    // machine's M1 resolves to apple_m1. Zig then picks different codegen
     // for the same source and produces a different binary.
     var target = b.standardTargetOptions(.{});
     target.result.cpu = std.Target.Cpu.baseline(target.result.cpu.arch, target.result.os);
     const optimize = b.standardOptimizeOption(.{});
 
-    // Without this, two clean rebuilds of the same source on the same
-    // machine produce different bytes: Zig's macOS linker embeds an LC_UUID
-    // (and a code-signature hash that covers it) derived from debug info
-    // that isn't otherwise deterministic. Stripping it removes the only
-    // source of that variance; verified by rebuilding ffpw twice and
-    // diffing (zero bytes differ once stripped, same output filename).
-    // Debug keeps its symbols, since that's the build meant for debugging.
+    // Zig's macOS linker embeds an LC_UUID, and a code-signature hash that
+    // covers it, derived from debug info that isn't otherwise deterministic.
+    // Stripping removes that debug info, so two clean rebuilds of the same
+    // source on the same machine produce identical bytes. Verified by
+    // rebuilding ffpw twice and diffing. Zero bytes differ, and the output
+    // filename matches. Debug keeps its symbols. That build exists for
+    // debugging.
     const strip = optimize != .Debug;
 
-    // @cImport is deprecated in 0.16; C translation belongs to the build system.
+    // @cImport is deprecated in 0.16. C translation belongs to the build system.
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.path("core/src/c.h"),
         .target = target,
@@ -59,7 +59,7 @@ pub fn build(b: *std.Build) void {
     b.step("test", "Run the core tests").dependOn(&b.addRunArtifact(tests).step);
 
     // TUI. core/src/root.zig is the module boundary a front end imports
-    // through; a relative import cannot cross from tui/src into core/src.
+    // through. A relative import cannot cross from tui/src into core/src.
     const core_mod = b.createModule(.{
         .root_source_file = b.path("core/src/root.zig"),
         .target = target,
@@ -91,13 +91,12 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| run_tui.addArgs(args);
     b.step("tui", "Run the TUI").dependOn(&run_tui.step);
 
-    // C ABI static library. Built for aarch64-macos, the only target this
-    // project supports; a universal binary earns its lipo step only once a
-    // second architecture is in scope, and none is yet. It shares `target`
-    // with everything else above rather than resolving its own target query,
-    // because an explicit query (even one matching the host) skips the
-    // native-SDK auto-detection standardTargetOptions gets, and sqlite3
-    // fails to link without it.
+    // C ABI static library. It shares `target` with everything else above,
+    // so -Dtarget applies to it too. Releases ship a single aarch64-macos
+    // slice, and no lipo step runs. Resolving a target query here instead
+    // would use an explicit query, even one matching the host, and that
+    // skips the native-SDK auto-detection standardTargetOptions gets.
+    // sqlite3 needs that auto-detection to link.
     const lib_translate_c = b.addTranslateC(.{
         .root_source_file = b.path("core/src/c.h"),
         .target = target,

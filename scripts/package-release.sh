@@ -1,11 +1,11 @@
 #!/bin/sh
-# Builds and packages the release artifacts: the TUI binary and the macOS
-# app, zipped. Both are reproducible builds: see build.zig's `strip` and
-# macos/scripts/bundle.sh's -gnone for why, and their commit messages for
-# what was verified. Used by .github/workflows/release.yml to build the
-# real thing, and by .github/workflows/ci.yml's reproducible-build job,
-# which runs this twice and diffs the output, so both exercise the exact
-# same packaging.
+# Builds and packages the release artifacts, the TUI binary and the
+# macOS app, zipped. Both are reproducible builds. See build.zig's
+# `strip` and macos/scripts/bundle.sh's -gnone for why, and their commit
+# messages for what was verified. .github/workflows/release.yml uses
+# this to build the real thing. .github/workflows/ci.yml's
+# reproducible-build job runs this twice and diffs the output. Both
+# jobs exercise the same packaging.
 set -eu
 
 version="${1:?usage: package-release.sh <version> <output-dir>}"

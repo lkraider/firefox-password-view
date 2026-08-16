@@ -1,8 +1,9 @@
 # Design notes
 
-Byte-level detail and decisions behind the core, measured against a live
-Firefox 152.0.6 profile on macOS 15.7.7 arm64, Zig 0.16.0. `README.md` covers
-usage and the threat model; this covers the format and the reasoning.
+What `core/src/` has to get right to read a Firefox profile, and why each
+part is written the way it is. Read this before changing the decryption
+path. The measurements come from a live Firefox 152.0.6 profile on macOS
+15.7.7 arm64, Zig 0.16.0. `README.md` covers usage and the threat model.
 
 ## Where Firefox stores the data
 
@@ -10,19 +11,22 @@ usage and the threat model; this covers the format and the reasoning.
   `httpRealm`, `formSubmitURL`, `usernameField`, `passwordField`,
   `encryptedUsername`, `encryptedPassword`, `guid`, `encType`, `timeCreated`,
   `timeLastUsed`, `timePasswordChanged`, `timesUsed`, `encryptedUnknownFields`.
-  There is no `origin` key; that name belongs to the JavaScript side.
+  There is no `origin` key. That name belongs to the JavaScript side.
 - `key4.db` — SQLite. `metaData` holds the global salt and the password-check
   value under `id = 'password'`. `nssPrivate` holds the wrapped master keys.
 - `cert9.db` — certificate store, unused here.
 
-`metaData` carried about seventy rows on the measured profile and
-`nssPrivate` carried three, so both queries filter rather than taking the
-first row.
+Both tables hold rows this reader has to skip. `metaData` also holds
+`sig_key_*` rows, so the query selects `id = 'password'`. `nssPrivate`
+also holds non-key objects, so the query filters on CKA_ID and object
+class. Both queries are in `keydb.zig`. Taking the first row of either
+table returns the wrong bytes.
 
 ### Two master keys, one key id
 
-`nssPrivate` holds **two** rows under CKA_ID `f8000000000000000000000000000001`
-with object class `CKO_SECRET_KEY` (`a0 = x'00000004'`):
+A profile Firefox 144 has opened holds **two** rows under CKA_ID
+`f8000000000000000000000000000001` with object class `CKO_SECRET_KEY`
+(`a0 = x'00000004'`):
 
 | wrapped size | decrypted size | key |
 |---|---|---|
@@ -35,19 +39,21 @@ Both rows are unwrapped and sorted by decrypted length.
 
 ### Firefox 144 migrated the whole store at once
 
-1625 of the 1701 encrypted entries on the measured profile were created
-before October 2025, and the oldest dates to March 2011. All 1701 use
-AES-256: Firefox does not re-encrypt an entry only when it is added or
-edited, the 144 upgrade re-encrypted the entire store at once.
+An entry's timestamps say nothing about its cipher. Read the OID from the
+entry. On the measured profile, 1625 of the 1701 entries predate October
+2025 and the oldest dates to March 2011, and all 1701 use AES-256. The
+144 upgrade re-encrypted every entry in one pass. The `unmigrated` and
+`migrated` fixtures are the same profile before and after that pass.
 
-### A Primary Password changes the global salt's size, and its hash
+### A Primary Password changes the global salt's size and the seed hash
 
 A never-initialized token stores metaData's global salt as 20 raw bytes and
 seeds its key derivation with SHA-1. Setting a Primary Password for the
-first time replaces it with a 48-byte salt and reseeds with SHA-384 instead
-(`sftkdb_passwordToKey` in NSS's softoken picks the hash by matching the
-salt's length). Seeding with SHA-1 regardless makes the correct password
-look wrong, indistinguishable from an incorrect one.
+first time replaces it with a 48-byte salt and reseeds with SHA-384.
+`sftkdb_passwordToKey` in NSS's softoken picks the hash by the salt's
+length, so the reader must do the same. Seeding with SHA-1 for a 48-byte
+salt makes the correct password fail. That failure looks exactly like a
+wrong password, so the `primary` fixture covers it.
 
 ### profiles.ini
 
@@ -57,24 +63,26 @@ measured machine `Default=1` sits on a profile that contains no `key4.db`,
 and the real profile is named only by the install section. Resolution reads
 the install section first.
 
-### Sync deletion tombstones and two non-web schemes
+### Sync tombstones and the non-web schemes
 
-A profile synced to a Mozilla Account leaves encryption unaffected, but not
-the data model.
+A profile synced to a Mozilla Account uses the same encryption as any
+other profile. It adds records that a reader written against an unsynced
+profile mishandles.
 
-2 records in `logins.json` carry `{deleted: true, everSynced, guid, id,
-syncCounter, timePasswordChanged}` and no hostname and no encrypted fields.
-These are deletions still held for propagation to other devices, not
-entries missing data; the store filters them before counting rather than
-reporting them as failures.
+A tombstone carries `{deleted: true, everSynced, guid, id, syncCounter,
+timePasswordChanged}` and no hostname or encrypted field. These are
+deletions held for propagation to other devices. A reader that treats a
+missing hostname as an error reports every tombstone as a failure.
+`logins.zig` counts them under `tombstones_skipped` and leaves them out
+of the entry list. The `sync-shaped` fixture carries two.
 
 One entry has `hostname = chrome://FirefoxAccounts` and
 `httpRealm = Firefox Accounts credentials`. Its username is the Mozilla
-Account email and its decrypted password is a JSON document holding sync
-key material, so revealing it hands over the account rather than one site
-password. The store labels this row `account_credential` rather than
-`normal`. Entries can also carry a `moz-extension://` origin, labelled
-`extension`; hostname parsing must not assume `http` or `https`.
+Account email, and its decrypted password is a JSON document holding sync
+key material. Revealing it hands over the whole Mozilla Account. The store
+labels this row `account_credential`. Entries can also carry a
+`moz-extension://` origin, labelled `extension`. Hostname parsing must not
+assume `http` or `https`.
 
 ## The decryption chain
 
@@ -93,7 +101,7 @@ The IV element carries a 14-byte body. NSS feeds the two header octets plus
 that body to AES as the 16-byte IV. Passing the body alone produces garbage.
 
 `iterations` was 1 on a never-initialized token and 10000 once a Primary
-Password is set; it is read from the structure either way.
+Password is set. It is read from the structure either way.
 
 **Decrypting a logins.json field:** base64-decode, then parse
 `SEQUENCE { OCTET keyId, SEQUENCE { OID cipher, OCTET iv }, OCTET ciphertext }`.
@@ -101,8 +109,8 @@ Here the IV is the element **body**, 16 bytes, used directly. Decrypt with
 the 32-byte master key.
 
 `metaData.item2` decrypts to the ASCII string `password-check`. This
-confirms the Primary Password before any key material is unwrapped, and it
-needs no credential, which makes it the test gate for the whole chain.
+confirms the Primary Password before any key material is unwrapped.
+Checking it needs no credential.
 
 ## Decisions
 
@@ -112,11 +120,11 @@ needs no credential, which makes it the test gate for the whole chain.
 | 3DES | Not implemented. `sdr.decrypt` returns `LegacyTripleDes` | A DES implementation adds roughly 300 lines of legacy cipher that 0 of 1701 entries need |
 | DER | Own bounds-checked reader | `std.crypto.Certificate.der` has no bounds checks, no canonical-form checks and no tests (ziglang/zig#19775) |
 | C interop | `b.addTranslateC` | `@cImport` is deprecated in Zig 0.16 |
-| SQLite | System library for now | Windows ships none; see Build and platform notes below |
+| SQLite | System library for now | Windows ships none. See Build and platform notes below |
 | Zig | Pin 0.16.0 | Tracking master breaks on each stdlib redesign |
 | Reveal | Masked by default, reveal one entry, copy to clipboard | Printing every password fills terminal scrollback |
-| Architecture | `aarch64-macos` only, for now | A universal binary earns its lipo step only once a second architecture is in scope |
-| Fixtures | Written by a real Firefox over Marionette, committed under `core/testdata/` | A generator built from this project's own reading of the format would only prove the reader agrees with the writer |
+| Architecture | Ship one `aarch64-macos` slice | A universal binary adds a lipo step and a second build for an architecture no release targets |
+| Fixtures | Written by an installed Firefox over Marionette, committed under `core/testdata/` | A generator built from this project's own reading of the format would only show the reader agrees with itself |
 
 ## Module layout
 
@@ -150,58 +158,52 @@ therefore needs the Command Line Tools, and cross-compiling to macOS from
 another host does not work as configured.
 
 Windows ships no system SQLite. Before a Windows target, vendor the SQLite
-amalgamation and compile it with Zig's bundled clang; that also makes macOS
-and Linux builds hermetic. The rejected alternative, a hand-written reader
-for the SQLite page format, needs varint decoding, overflow pages and
-freelist handling on a read path that must not return wrong bytes.
+amalgamation and compile it with Zig's bundled clang. That also makes
+macOS and Linux builds hermetic. The rejected alternative, a hand-written
+reader for the SQLite page format, needs varint decoding, overflow pages
+and freelist handling on a read path that must not return wrong bytes.
 
-macOS App Sandbox would block reading another app's data directory without
-a per-run open panel. Outside the sandbox, `~/Library/Application Support`
-is not TCC-protected, so no permission prompt appears.
+macOS App Sandbox needs a per-run open panel before it allows reading
+another app's data directory. Outside the sandbox, `~/Library/Application
+Support` is not TCC-protected, so no permission prompt appears.
 
 ## Known limitations
 
-- Zig 0.16 removed `std.posix.getenv`, `std.time.Timer` and the old
-  `std.fs` entry points, and moved filesystem access under `std.Io`. Each
-  Zig upgrade needs migration time; the compiler version stays pinned.
-- Firefox changed this format in October 2025. Cipher selection reads the
-  OID from the file, so a further format change surfaces as an explicit
-  unsupported-cipher error rather than silent corruption.
-- Reading `key4.db` while Firefox holds it open works: verified with
-  Firefox 152.0.6 running and its `.parentlock` held, decrypting the same
-  1701 entries as a closed-Firefox run. No `key4.db-wal` appeared during
-  that session. A read landing mid-write, while a WAL file exists, is
-  still unverified: producing that state on demand needs a real write to
-  a real profile, which stays out of scope for a test.
-- `zig build test --fuzz` does not run on the pinned Zig 0.16.0: its own
-  bundled `test_runner.zig` calls `std.debug.writeStackTrace` with the old
-  `*builtin.StackTrace` where the signature now wants `*debug.StackTrace`,
-  a compile error in Zig's own runner. Plain `zig build test` still runs
-  the fuzz corpus once, with no mutation.
-- Windows and Linux are deferred; see Build and platform notes above for
-  what a Windows target still needs.
-- The release build is reproducible only on the same machine, not across
-  machines with a different macOS SDK installed. Two builds on this
-  machine, from a clean cache, at a different absolute path, at a
-  different job-parallelism (`-j1` vs `-j4`), and after ad-hoc codesigning,
-  all produced byte-identical output (`build.zig`'s `strip`, pinned to a
-  CPU baseline rather than "native"). A build on this machine (SDK 26.2)
-  and one on GitHub's `macos-15` CI runner did not match: Zig's macOS
-  linker hashes SDK-derived bytes into the binary's `LC_UUID`, and
-  `vtool(1)` can rewrite the visible `LC_BUILD_VERSION` fields afterward
-  but has no equivalent for `LC_UUID`, which was already computed from the
-  original bytes. Fixing this across machines needs a macOS SDK vendored
-  into every build environment (as `zig-build-macos-sdk` does for
-  Ghostty), not a one-line change. `Formula/ffpw.rb` and
-  `Casks/firefox-password-view.rb` pin CI's hash, read from
-  `ci.yml`'s `reproducible-build` job, which prints it on every push.
+- `oids.zig`'s `Cipher.fromOid` knows two OIDs, AES-256-CBC and legacy
+  3DES. Firefox 152.0.6 writes no others. A profile using any other
+  cipher stops at `error.UnsupportedCipher` from `sdr.parse`. Adding one
+  means adding its OID and an implementation.
+- Reading `key4.db` while Firefox has it open works. Verified against
+  Firefox 152.0.6 running with its `.parentlock` held, decrypting the
+  same 1701 entries as a closed-Firefox run, and no `key4.db-wal`
+  appeared. A read landing mid-write with a WAL file present is
+  untested. Reaching that state needs a write to a live profile. No test
+  here performs one.
+- `zig build test --fuzz` does not run on the pinned Zig 0.16.0. Zig's
+  bundled `test_runner.zig` passes a `*builtin.StackTrace` to
+  `std.debug.writeStackTrace`, whose signature now wants
+  `*debug.StackTrace`. The runner fails to compile. Plain `zig build
+  test` still runs the fuzz corpus once, with no mutation.
+- Windows and Linux are deferred. `der`, `oids`, `aescbc`, `pbes2`,
+  `sdr`, `keydb`, `logins` and `store` call no OS-specific API. A Linux
+  TUI needs the profile directory (`~/.mozilla/firefox`) and a clipboard
+  call to replace `pbcopy`. Windows needs both of those and a vendored
+  SQLite.
+- One machine building the release twice produces byte-identical output.
+  That holds across a clean cache, a different absolute path, `-j1`
+  against `-j4`, and ad-hoc codesigning. Two machines with different
+  macOS SDKs installed produce different bytes from the same source.
+  Zig's macOS linker hashes SDK-derived bytes into the binary's
+  `LC_UUID`. `vtool(1)` rewrites `LC_BUILD_VERSION`. It has no option for
+  `LC_UUID`. Closing this needs the macOS SDK vendored into every build
+  environment, as `zig-build-macos-sdk` does for Ghostty. Until then
+  `Formula/ffpw.rb` and `Casks/firefox-password-view.rb` carry CI's hash,
+  printed by `ci.yml`'s `reproducible-build` job on every push.
 
 ## Prior art
 
-- `firepwd.py` (lclevy) — pure Python, no NSS, updated October 2025 for the
-  Firefox 144 change. The reference for the IV construction above.
-- `firefox_decrypt` (unode) — Python, links NSS.
-- `PasswordFox` (NirSoft) — closed source, Windows only, version 1.75 added
-  Firefox 144 support.
-- Firefox Lockwise — Mozilla's mobile app, discontinued December 2021. No
-  desktop equivalent exists.
+- `firepwd.py` (lclevy) — pure Python, no NSS, updated October 2025 for
+  the Firefox 144 change. Cross-check format questions against this one.
+  The IV construction above came from it.
+- `firefox_decrypt` (unode) — Python, calls into NSS. Run it on the same
+  profile to compare this core's output against NSS itself.

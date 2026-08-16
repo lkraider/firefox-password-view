@@ -1,10 +1,9 @@
-# Firefox Password Viewer — macOS app
+# Firefox Password View — macOS app
 
-A Swift package rather than an `.xcodeproj`: this machine has only the
-Command Line Tools, no full Xcode and no codesigning identity, and
-`swift build` ad-hoc signs its output, which is enough to run locally. Open
-this in Xcode once a full install exists; nothing here depends on SwiftPM
-specifically.
+This is a Swift package. Xcode Command Line Tools are enough to build,
+test and run it. No codesigning identity is needed, since `swift build`
+ad-hoc signs its output. A full Xcode install also opens this package
+directly.
 
 ## Building
 
@@ -14,38 +13,37 @@ cd macos
 swift build
 ```
 
-SwiftPM does not know `libffpw.a` is a build input (it is linked through a
-raw `-L`/`-l` flag, outside SwiftPM's own dependency graph), so it will not
-relink after a Zig-side change on its own. Run `rm -rf macos/.build` before
+`Package.swift` links `libffpw.a` through a raw `-L`/`-l` flag. That puts
+the file outside SwiftPM's dependency graph, so SwiftPM treats a changed
+`libffpw.a` as no reason to relink. Run `rm -rf macos/.build` before
 `swift build` any time `libffpw.a` changes.
 
 ## Running
 
-`swift build`'s output is a plain executable, not a `.app` bundle. Running
-it directly (`.build/debug/FirefoxPasswordView`) launches it outside
-LaunchServices, so the window opens but cannot take keyboard focus from the
-terminal. Use `scripts/bundle.sh` to wrap it in a minimal ad-hoc-signed
-bundle instead, and launch that with `open`:
+`swift build`'s output is a plain executable. Running it directly
+(`.build/debug/FirefoxPasswordView`) launches it outside LaunchServices.
+The window opens. It cannot take keyboard focus from the terminal. Use
+`scripts/bundle.sh` to wrap it in a minimal ad-hoc-signed bundle, and
+launch that with `open`:
 
 ```
 scripts/bundle.sh          # builds core and app in release, produces .build/release/FirefoxPasswordView.app
 open .build/release/FirefoxPasswordView.app
 ```
 
-`scripts/bundle.sh` builds release by default: it builds the Zig core with
-`-Doptimize=ReleaseSafe` and the app with `swift build -c release`. A Debug
-build of either disables enough optimization (Zig's inlining, Swift's
-whole-module optimization) to make filtering and reveal feel sluggish, so
-Debug is not representative of how the app actually performs. Pass `debug`
-for a fast dev rebuild instead: `scripts/bundle.sh debug`.
+`scripts/bundle.sh` builds release by default, the Zig core with
+`-Doptimize=ReleaseSafe` and the app with `swift build -c release`. Debug
+turns off Zig's inlining and Swift's whole-module optimization. Filtering
+and reveal feel sluggish in a Debug build, so judge performance on a
+release build. Pass `debug` for a fast dev rebuild:
+`scripts/bundle.sh debug`.
 
 ## Testing
 
-Only Command Line Tools is installed, and `swift-testing`'s runtime lives
-under a Frameworks directory the dynamic linker does not search by default
-in that configuration. `Package.swift` bakes in an `-rpath` for it, and
-`-F <path>` still needs to be passed at the command line for the compiler
-itself to find the module:
+Under Command Line Tools, `swift-testing`'s runtime lives in a Frameworks
+directory the dynamic linker does not search by default. `Package.swift`
+bakes in an `-rpath` for it. The compiler still needs `-F <path>` on the
+command line to find the module:
 
 ```
 swift test -Xswiftc -F -Xswiftc /Library/Developer/CommandLineTools/Library/Developer/Frameworks
@@ -56,7 +54,6 @@ A full Xcode install would not need this.
 ## Known issue
 
 AppKit logs "reentrant operation in its NSTableView delegate" once during
-the initial load of a large profile. It has not been observed to crash, but
-macOS's own message marks it a future assert. Chasing it further needs
-Instruments, which this environment does not have; do this before the
-release milestone.
+the initial load of a large profile. No crash has followed it in any run
+so far. macOS's message says the same call will assert in a future
+release. Finding the call needs Instruments.

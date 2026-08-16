@@ -11,10 +11,10 @@ env:
 
 jobs:
   build-and-test:
-    # Only a macOS runner can link libsqlite3 through the macOS SDK stub;
-    # see docs/DESIGN.md's Build and platform notes. macos-15's default
-    # Xcode ships Swift 6, which Package.swift's swift-tools-version needs;
-    # macos-14's default Xcode only ships Swift 5.10.
+    # Only a macOS runner can link libsqlite3 through the macOS SDK stub.
+    # See docs/DESIGN.md's Build and platform notes. macos-15's default
+    # Xcode ships Swift 6. Package.swift's swift-tools-version needs
+    # Swift 6. macos-14's default Xcode only ships Swift 5.10.
     runs-on: macos-15
 
     steps:
@@ -54,9 +54,9 @@ jobs:
 
   reproducible-build:
     # Packages the release artifacts twice from a clean state and diffs
-    # them: catches a regression in build.zig's strip, bundle.sh's -gnone,
-    # or the tar/ditto flags in scripts/package-release.sh, all of which
-    # exist specifically to keep this build byte-for-byte reproducible.
+    # them. This catches a regression in build.zig's strip, bundle.sh's
+    # -gnone, or the tar/ditto flags in scripts/package-release.sh. Each
+    # of those exists to keep this build byte-for-byte reproducible.
     runs-on: macos-15
 
     steps:

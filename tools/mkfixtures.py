@@ -3,8 +3,8 @@
 
 Fixtures must be produced by real Firefox writing real NSS output. A
 generator that encodes this project's own reading of key4.db and
-logins.json would only prove the reader agrees with the writer. See
-core/testdata/README.md and the plan under milestone 0 for why.
+logins.json would only show the reader agrees with itself. See
+core/testdata/README.md for what each fixture covers.
 
 Usage:
     tools/mkfixtures.py fresh       --profile core/testdata/fresh/profile
@@ -227,8 +227,9 @@ const [password, resolve] = arguments;
   const token = Cc["@mozilla.org/security/internalkeytoken;1"]
     .createInstance(Ci.nsIPKCS11Token);
   // A never-initialized token takes its first password through
-  // changePassword("", new), not initPassword. See changemp.js: the
-  // uninitialized case sets oldpw = "" and calls changePassword.
+  // changePassword("", new). Firefox's own changemp.js does the same:
+  // the uninitialized case sets oldpw = "" and calls changePassword.
+  // initPassword does not set it.
   token.changePassword("", password);
   resolve("ok " + token.needsLogin() + " " + token.checkPassword(password));
 })().catch(e => resolve("error: " + e));
