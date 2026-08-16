@@ -180,6 +180,21 @@ is not TCC-protected, so no permission prompt appears.
   the fuzz corpus once, with no mutation.
 - Windows and Linux are deferred; see Build and platform notes above for
   what a Windows target still needs.
+- The release build is reproducible only on the same machine, not across
+  machines with a different macOS SDK installed. Two builds on this
+  machine, from a clean cache, at a different absolute path, at a
+  different job-parallelism (`-j1` vs `-j4`), and after ad-hoc codesigning,
+  all produced byte-identical output (`build.zig`'s `strip`, pinned to a
+  CPU baseline rather than "native"). A build on this machine (SDK 26.2)
+  and one on GitHub's `macos-15` CI runner did not match: Zig's macOS
+  linker hashes SDK-derived bytes into the binary's `LC_UUID`, and
+  `vtool(1)` can rewrite the visible `LC_BUILD_VERSION` fields afterward
+  but has no equivalent for `LC_UUID`, which was already computed from the
+  original bytes. Fixing this across machines needs a macOS SDK vendored
+  into every build environment (as `zig-build-macos-sdk` does for
+  Ghostty), not a one-line change. `Formula/ffpw.rb` and
+  `Casks/firefox-password-view.rb` pin CI's hash, read from
+  `ci.yml`'s `reproducible-build` job, which prints it on every push.
 
 ## Prior art
 
