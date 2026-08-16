@@ -417,3 +417,42 @@ test "profiles.enumerate on two-profiles finds the one with no key4.db" {
     try testing.expectEqual(@as(usize, 1), without_key4);
     try testing.expectEqual(@as(usize, 1), with_key4);
 }
+
+// `zig build test --fuzz` mutates these real DER blobs (an AES-256 SDR
+// blob, a des_ede3_cbc one, and one decoded straight out of the fresh
+// fixture's encryptedUsername) and feeds every mutation to der.Reader's two
+// real call paths. Nothing here should ever panic; a parse error is a
+// correct answer for bytes that were never valid to begin with.
+//
+// `--fuzz` itself does not run on the pinned Zig 0.16.0: test_runner.zig
+// calls std.debug.writeStackTrace with a *builtin.StackTrace where it now
+// takes a *debug.StackTrace, a compile error in Zig's own bundled test
+// runner (github.com/ziglang/zig, "Errors when trying to run
+// std.testing.fuzz on 0.16", Ziggit thread 15515). Plain `zig build test`
+// still compiles and runs this test once, over the corpus above, with no
+// mutation. Rerun with --fuzz once a Zig version fixes that runner.
+test "fuzz sdr.parse and pbes2.parse over mutated real blobs" {
+    try testing.fuzz({}, fuzzParsers, .{
+        .corpus = &.{
+            &hex("30430410f8000000000000000000000000000001" ++
+                "301d060960864801650304012a" ++
+                "0410000102030405060708090a0b0c0d0e0f" ++
+                "0410aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            &hex("303a0410f8000000000000000000000000000001" ++
+                "3014" ++ "06082a864886f70d0307" ++ "04080001020304050607" ++
+                "0410aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            &hex("30430410f8000000000000000000000000000001" ++
+                "301d060960864801650304012a" ++
+                "0410aff746a5e8fbc81eeda1ea77890d8169" ++
+                "0410a85a33da899c6e4f8c92a5e91c35b7f3"),
+        },
+    });
+}
+
+fn fuzzParsers(_: void, smith: *testing.Smith) anyerror!void {
+    var buf: [512]u8 = undefined;
+    const n = smith.slice(&buf);
+    const data = buf[0..n];
+    _ = sdr.parse(data) catch {};
+    _ = pbes2.parse(data) catch {};
+}
