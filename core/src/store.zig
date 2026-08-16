@@ -1,0 +1,95 @@
+//! Owns one profile's decrypted state: the arena every string in `entries`
+//! lives in, the keys `reveal` decrypts with, and the search filter. Both
+//! front ends match identically because the filter lives here, not in
+//! either one of them.
+
+const std = @import("std");
+const keydb = @import("keydb.zig");
+const logins = @import("logins.zig");
+
+pub const Entry = logins.Entry;
+pub const Kind = logins.Kind;
+
+pub const Store = struct {
+    arena: std.heap.ArenaAllocator,
+    profile_path: []const u8,
+    keys: keydb.Keys,
+    entries: []Entry,
+    tombstones_skipped: usize,
+    malformed: usize,
+
+    /// Opens `profile_path`/key4.db and `profile_path`/logins.json, decrypts
+    /// every username, and keeps every password's SDR blob for `reveal`.
+    /// `backing` is only used while opening; everything returned lives in
+    /// the arena this `Store` owns from here on.
+    pub fn open(
+        backing: std.mem.Allocator,
+        io: std.Io,
+        profile_path: []const u8,
+        password: []const u8,
+    ) !Store {
+        var arena_state = std.heap.ArenaAllocator.init(backing);
+        errdefer arena_state.deinit();
+        const gpa = arena_state.allocator();
+
+        const key4 = try std.fmt.allocPrintSentinel(gpa, "{s}/key4.db", .{profile_path}, 0);
+        const keys = try keydb.load(key4, password);
+
+        const cwd = std.Io.Dir.cwd();
+        const logins_path = try std.fmt.allocPrint(gpa, "{s}/logins.json", .{profile_path});
+        const json = try cwd.readFileAlloc(io, logins_path, gpa, .unlimited);
+
+        const result = try logins.scan(gpa, json, keys);
+
+        return .{
+            .arena = arena_state,
+            .profile_path = try gpa.dupe(u8, profile_path),
+            .keys = keys,
+            .entries = result.entries,
+            .tombstones_skipped = result.tombstones_skipped,
+            .malformed = result.malformed,
+        };
+    }
+
+    /// Wipes every decrypted username before freeing the arena that holds
+    /// them. `reveal` never puts a password in this arena; it decrypts
+    /// straight into the caller's buffer, which the caller must wipe.
+    pub fn deinit(self: *Store) void {
+        for (self.entries) |e| {
+            std.crypto.secureZero(u8, @constCast(e.username));
+        }
+        self.arena.deinit();
+    }
+
+    /// Case-insensitive substring match over hostname and username. Writes
+    /// at most `out.len` matching indices, in entry order, and returns the
+    /// total number that matched, which may exceed `out.len`. An empty
+    /// query matches every entry.
+    pub fn search(self: *const Store, query: []const u8, out: []usize) usize {
+        var count: usize = 0;
+        for (self.entries, 0..) |e, i| {
+            const hit = query.len == 0 or
+                containsIgnoreCase(e.hostname, query) or
+                containsIgnoreCase(e.username, query);
+            if (!hit) continue;
+            if (count < out.len) out[count] = i;
+            count += 1;
+        }
+        return count;
+    }
+
+    /// Decrypts entry `index`'s password into `out`. Returns
+    /// `error.LegacyTripleDes` for an entry this project cannot decrypt.
+    pub fn reveal(self: *const Store, index: usize, scratch: []u8, out: []u8) ![]u8 {
+        return logins.revealPassword(self.entries[index], self.keys, scratch, out);
+    }
+};
+
+fn containsIgnoreCase(haystack: []const u8, needle: []const u8) bool {
+    if (needle.len > haystack.len) return false;
+    var i: usize = 0;
+    while (i + needle.len <= haystack.len) : (i += 1) {
+        if (std.ascii.eqlIgnoreCase(haystack[i .. i + needle.len], needle)) return true;
+    }
+    return false;
+}

@@ -4,8 +4,7 @@
 const std = @import("std");
 const c = @import("c");
 const profiles = @import("profiles.zig");
-const keydb = @import("keydb.zig");
-const logins = @import("logins.zig");
+const store = @import("store.zig");
 
 pub fn main() !void {
     var arena_state = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -26,22 +25,36 @@ pub fn main() !void {
     const ini_path = try std.fs.path.join(gpa, &.{ firefox_dir, "profiles.ini" });
     const ini = try cwd.readFileAlloc(io, ini_path, gpa, .unlimited);
 
+    const all_profiles = try profiles.enumerate(gpa, firefox_dir, ini);
+    std.debug.print("profiles:  {d} found\n", .{all_profiles.len});
+
     const profile = try profiles.resolveDefault(gpa, firefox_dir, ini);
     std.debug.print("profile:   {s}\n", .{profile});
 
-    const key4 = try std.fs.path.joinZ(gpa, &.{ profile, "key4.db" });
-    const keys = try keydb.load(key4, "");
+    var s = try store.Store.open(gpa, io, profile, "");
+    defer s.deinit();
     std.debug.print("password-check verified with an empty Primary Password\n", .{});
-    std.debug.print("aes256 key: {s}\n", .{if (keys.aes256 != null) "present (32 bytes)" else "absent"});
-    std.debug.print("3des key:   {s}\n", .{if (keys.des3 != null) "present (24 bytes)" else "absent"});
+    std.debug.print("aes256 key: {s}\n", .{if (s.keys.aes256 != null) "present (32 bytes)" else "absent"});
+    std.debug.print("3des key:   {s}\n", .{if (s.keys.des3 != null) "present (24 bytes)" else "absent"});
 
-    const logins_path = try std.fs.path.join(gpa, &.{ profile, "logins.json" });
-    const json = try cwd.readFileAlloc(io, logins_path, gpa, .unlimited);
-
-    const stats = try logins.scan(gpa, json, keys);
+    var legacy_3des: usize = 0;
+    var account_credentials: usize = 0;
+    var extensions: usize = 0;
+    for (s.entries) |e| {
+        if (e.legacy_3des) legacy_3des += 1;
+        switch (e.kind) {
+            .account_credential => account_credentials += 1,
+            .extension => extensions += 1,
+            .normal => {},
+        }
+    }
 
     std.debug.print(
-        "logins:    {d} total, {d} decrypted, {d} incomplete, {d} legacy 3des, {d} failed\n",
-        .{ stats.total, stats.decrypted, stats.incomplete, stats.legacy_3des, stats.failed },
+        "logins:    {d} total, {d} decrypted, {d} legacy 3des, {d} tombstones skipped, {d} malformed\n",
+        .{ s.entries.len, s.entries.len - legacy_3des, legacy_3des, s.tombstones_skipped, s.malformed },
+    );
+    std.debug.print(
+        "kinds:     {d} account credential, {d} extension\n",
+        .{ account_credentials, extensions },
     );
 }

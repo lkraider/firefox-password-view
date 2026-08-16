@@ -103,7 +103,16 @@ test "a 3des entry reports the migration error rather than decrypting" {
     try testing.expectError(error.LegacyTripleDes, sdr.decrypt(blob, @splat(0), &out));
 }
 
-test "logins.scan reports legacy_3des rather than NoSdrKey when no AES-256 key exists" {
+fn freeScanResult(gpa: std.mem.Allocator, result: anytype) void {
+    for (result.entries) |e| {
+        gpa.free(e.hostname);
+        gpa.free(e.username);
+        gpa.free(e.encrypted_password);
+    }
+    gpa.free(result.entries);
+}
+
+test "logins.scan keeps a legacy_3des entry rather than dropping it for NoSdrKey" {
     // A profile Firefox 144 has never opened carries no AES-256 key at all
     // (regression: decryptField used to ask for keys.aes256 before parsing
     // the blob, so every entry surfaced as the generic NoSdrKey instead of
@@ -112,15 +121,19 @@ test "logins.scan reports legacy_3des rather than NoSdrKey when no AES-256 key e
     const logins = @import("logins.zig");
     const json =
         \\{"logins": [{
+        \\  "hostname": "https://example.com",
         \\  "encryptedUsername": "MDoEEPgAAAAAAAAAAAAAAAAAAAEwFAYIKoZIhvcNAwcECAABAgMEBQYHBBCqqqqqqqqqqqqqqqqqqqqq",
         \\  "encryptedPassword": "MDoEEPgAAAAAAAAAAAAAAAAAAAEwFAYIKoZIhvcNAwcECAABAgMEBQYHBBCqqqqqqqqqqqqqqqqqqqqq"
         \\}]}
     ;
     const keys: keydb.Keys = .{ .aes256 = null, .des3 = @splat(0) };
-    const stats = try logins.scan(testing.allocator, json, keys);
-    try testing.expectEqual(@as(usize, 1), stats.total);
-    try testing.expectEqual(@as(usize, 1), stats.legacy_3des);
-    try testing.expectEqual(@as(usize, 1), stats.failed);
+    const result = try logins.scan(testing.allocator, json, keys);
+    defer freeScanResult(testing.allocator, result);
+
+    try testing.expectEqual(@as(usize, 1), result.entries.len);
+    try testing.expect(result.entries[0].legacy_3des);
+    try testing.expectEqualStrings("", result.entries[0].username);
+    try testing.expectEqualStrings("https://example.com", result.entries[0].hostname);
 }
 
 test "pbes2 seeds with SHA384 when the global salt is 48 bytes" {
@@ -173,10 +186,17 @@ test "the fresh fixture decrypts every entry with an empty Primary Password" {
     defer testing.allocator.free(json);
 
     const keys = try keydb.load("core/testdata/fresh/key4.db", "");
-    const stats = try logins.scan(testing.allocator, json, keys);
-    try testing.expectEqual(@as(usize, 3), stats.total);
-    try testing.expectEqual(@as(usize, 3), stats.decrypted);
-    try testing.expectEqual(@as(usize, 0), stats.failed);
+    const result = try logins.scan(testing.allocator, json, keys);
+    defer freeScanResult(testing.allocator, result);
+
+    try testing.expectEqual(@as(usize, 3), result.entries.len);
+    try testing.expectEqual(@as(usize, 0), result.tombstones_skipped);
+    try testing.expectEqual(@as(usize, 0), result.malformed);
+    for (result.entries) |e| {
+        try testing.expect(!e.legacy_3des);
+        try testing.expect(e.username.len > 0);
+        try testing.expectEqual(logins.Kind.normal, e.kind);
+    }
 }
 
 test "the primary fixture needs its documented Primary Password" {
@@ -189,10 +209,14 @@ test "the primary fixture needs its documented Primary Password" {
     try testing.expectError(error.WrongPassword, keydb.load("core/testdata/primary/key4.db", "wrong"));
 
     const keys = try keydb.load("core/testdata/primary/key4.db", "fixture-primary-password-1");
-    const stats = try logins.scan(testing.allocator, json, keys);
-    try testing.expectEqual(@as(usize, 3), stats.total);
-    try testing.expectEqual(@as(usize, 3), stats.decrypted);
-    try testing.expectEqual(@as(usize, 0), stats.failed);
+    const result = try logins.scan(testing.allocator, json, keys);
+    defer freeScanResult(testing.allocator, result);
+
+    try testing.expectEqual(@as(usize, 3), result.entries.len);
+    for (result.entries) |e| {
+        try testing.expect(!e.legacy_3des);
+        try testing.expect(e.username.len > 0);
+    }
 }
 
 test "two-profiles resolves to the profile the install section names, not Default=1" {
@@ -224,11 +248,14 @@ test "the unmigrated fixture carries a real 24-byte 3DES key and no AES-256 key"
     try testing.expect(keys.aes256 == null);
     try testing.expect(keys.des3 != null);
 
-    const stats = try logins.scan(testing.allocator, json, keys);
-    try testing.expectEqual(@as(usize, 3), stats.total);
-    try testing.expectEqual(@as(usize, 3), stats.legacy_3des);
-    try testing.expectEqual(@as(usize, 3), stats.failed);
-    try testing.expectEqual(@as(usize, 0), stats.decrypted);
+    const result = try logins.scan(testing.allocator, json, keys);
+    defer freeScanResult(testing.allocator, result);
+
+    try testing.expectEqual(@as(usize, 3), result.entries.len);
+    for (result.entries) |e| {
+        try testing.expect(e.legacy_3des);
+        try testing.expectEqualStrings("", e.username);
+    }
 }
 
 test "the migrated fixture carries both key rows and decrypts every entry" {
@@ -247,25 +274,146 @@ test "the migrated fixture carries both key rows and decrypts every entry" {
     try testing.expect(keys.aes256 != null);
     try testing.expect(keys.des3 != null);
 
-    const stats = try logins.scan(testing.allocator, json, keys);
-    try testing.expectEqual(@as(usize, 3), stats.total);
-    try testing.expectEqual(@as(usize, 3), stats.decrypted);
-    try testing.expectEqual(@as(usize, 0), stats.failed);
+    const result = try logins.scan(testing.allocator, json, keys);
+    defer freeScanResult(testing.allocator, result);
+
+    try testing.expectEqual(@as(usize, 3), result.entries.len);
+    for (result.entries) |e| {
+        try testing.expect(!e.legacy_3des);
+        try testing.expect(e.username.len > 0);
+    }
 }
 
-test "the sync-shaped fixture carries tombstones, an account row and an extension row" {
-    // logins.zig does not yet give tombstones their own category (that is
-    // milestone 1); today they land in `incomplete` because they carry no
-    // encrypted fields. This test pins today's behaviour, not the goal.
+test "the sync-shaped fixture filters tombstones and labels the account and extension rows" {
     const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json = try readFixtureLogins(testing.allocator, "core/testdata/sync-shaped/logins.json");
     defer testing.allocator.free(json);
 
     const keys = try keydb.load("core/testdata/sync-shaped/key4.db", "");
-    const stats = try logins.scan(testing.allocator, json, keys);
-    try testing.expectEqual(@as(usize, 7), stats.total);
-    try testing.expectEqual(@as(usize, 5), stats.decrypted);
-    try testing.expectEqual(@as(usize, 2), stats.incomplete);
-    try testing.expectEqual(@as(usize, 0), stats.failed);
+    const result = try logins.scan(testing.allocator, json, keys);
+    defer freeScanResult(testing.allocator, result);
+
+    // 7 rows in logins.json: 3 ordinary logins, 1 account row, 1 extension
+    // row, and 2 tombstones. Tombstones are filtered, not counted.
+    try testing.expectEqual(@as(usize, 5), result.entries.len);
+    try testing.expectEqual(@as(usize, 2), result.tombstones_skipped);
+    try testing.expectEqual(@as(usize, 0), result.malformed);
+
+    var account_count: usize = 0;
+    var extension_count: usize = 0;
+    var normal_count: usize = 0;
+    for (result.entries) |e| {
+        switch (e.kind) {
+            .account_credential => {
+                account_count += 1;
+                try testing.expectEqualStrings("chrome://FirefoxAccounts", e.hostname);
+            },
+            .extension => {
+                extension_count += 1;
+                try testing.expect(std.mem.startsWith(u8, e.hostname, "moz-extension://"));
+            },
+            .normal => normal_count += 1,
+        }
+        try testing.expect(!e.legacy_3des);
+        try testing.expect(e.username.len > 0);
+    }
+    try testing.expectEqual(@as(usize, 1), account_count);
+    try testing.expectEqual(@as(usize, 1), extension_count);
+    try testing.expectEqual(@as(usize, 3), normal_count);
+}
+
+fn openFixture(profile_path: []const u8, password: []const u8) !@import("store.zig").Store {
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    return @import("store.zig").Store.open(testing.allocator, io, profile_path, password);
+}
+
+test "Store.open on the sync-shaped fixture filters tombstones like logins.scan" {
+    var s = try openFixture("core/testdata/sync-shaped", "");
+    defer s.deinit();
+
+    try testing.expectEqual(@as(usize, 5), s.entries.len);
+    try testing.expectEqual(@as(usize, 2), s.tombstones_skipped);
+
+    var scratch: [8192]u8 = undefined;
+    var out: [8192]u8 = undefined;
+    for (s.entries, 0..) |e, i| {
+        if (e.kind != .normal) continue;
+        const plain = try s.reveal(i, &scratch, &out);
+        try testing.expect(std.mem.startsWith(u8, plain, "fixture-pass-"));
+    }
+}
+
+test "Store.search matches case-insensitively over hostname and username" {
+    var s = try openFixture("core/testdata/fresh", "");
+    defer s.deinit();
+
+    var out: [8]usize = undefined;
+
+    // Every entry in `fresh` carries "example" somewhere in its hostname.
+    const example_count = s.search("EXAMPLE", &out);
+    try testing.expectEqual(@as(usize, 3), example_count);
+
+    // An empty query matches every entry.
+    const empty_count = s.search("", &out);
+    try testing.expectEqual(s.entries.len, empty_count);
+
+    // A query that matches nothing.
+    const none_count = s.search("no-such-substring-anywhere", &out);
+    try testing.expectEqual(@as(usize, 0), none_count);
+
+    // A query narrow enough to match exactly one entry, by username.
+    const one_count = s.search("fixture-user-2", &out);
+    try testing.expectEqual(@as(usize, 1), one_count);
+    try testing.expectEqualStrings("https://sub.example.org", s.entries[out[0]].hostname);
+}
+
+test "Store.search reports the true match count past the output cap" {
+    var s = try openFixture("core/testdata/fresh", "");
+    defer s.deinit();
+
+    var out: [1]usize = undefined;
+    const count = s.search("", &out);
+    try testing.expectEqual(s.entries.len, count);
+    try testing.expect(count > out.len);
+}
+
+test "profiles.enumerate on two-profiles finds the one with no key4.db" {
+    const profiles = @import("profiles.zig");
+    const firefox_dir = "core/testdata/two-profiles";
+
+    const ini = try readFixtureLogins(testing.allocator, firefox_dir ++ "/profiles.ini");
+    defer testing.allocator.free(ini);
+
+    const list = try profiles.enumerate(testing.allocator, firefox_dir, ini);
+    defer {
+        for (list) |p| {
+            testing.allocator.free(p.name);
+            testing.allocator.free(p.path);
+        }
+        testing.allocator.free(list);
+    }
+
+    try testing.expectEqual(@as(usize, 2), list.len);
+
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const cwd = std.Io.Dir.cwd();
+
+    var without_key4: usize = 0;
+    var with_key4: usize = 0;
+    for (list) |p| {
+        const key4 = try std.fmt.allocPrint(testing.allocator, "{s}/key4.db", .{p.path});
+        defer testing.allocator.free(key4);
+        if (cwd.access(io, key4, .{})) {
+            with_key4 += 1;
+        } else |_| {
+            without_key4 += 1;
+        }
+    }
+    try testing.expectEqual(@as(usize, 1), without_key4);
+    try testing.expectEqual(@as(usize, 1), with_key4);
 }
