@@ -11,6 +11,24 @@ const store_mod = core.store;
 
 const masked_password = "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
 
+/// Every error store.zig and its dependencies can produce, given a message a
+/// person can act on. The store has no fixed error set (it is `!T`
+/// throughout), so the fallback branch exists for real: a DER or PBES2
+/// parse error a person cannot do anything about beyond reporting a bug.
+fn friendlyMessage(err: anyerror) []const u8 {
+    return switch (err) {
+        error.WrongPassword => "wrong Primary Password",
+        error.LegacyTripleDes => "this entry is still 3DES, which this app cannot decrypt",
+        error.OpenFailed => "could not open key4.db for this profile",
+        error.MissingPasswordRow, error.NoSdrKey, error.QueryFailed => "this profile's key4.db is missing data this app expects",
+        error.NoLoginsArray => "logins.json is not in the shape this app expects",
+        error.OutOfMemory => "out of memory",
+        error.FileNotFound => "logins.json or key4.db is missing",
+        error.AccessDenied => "permission denied reading this profile",
+        else => "could not read this profile (unexpected error)",
+    };
+}
+
 /// A password prompt with its own tiny buffer, drawn as one bullet per
 /// grapheme typed. Kept separate from vxfw.TextField so the plaintext
 /// Primary Password only ever exists in a buffer this file wipes itself.
@@ -108,6 +126,10 @@ const Model = struct {
 
     password_field: SecretField,
     password_error: bool = false,
+    /// Set when opening the profile failed for a reason other than a wrong
+    /// or missing Primary Password. Nothing is interactive at that point;
+    /// the screen just states why and waits to be quit.
+    open_error: bool = false,
 
     store: ?store_mod.Store = null,
     rows: []Row = &.{},
@@ -176,18 +198,26 @@ const Model = struct {
         self.status_line.text = self.status[0..self.status_len];
     }
 
-    fn tryOpen(self: *Model, password: []const u8) !void {
+    /// Never propagates an error: every failure ends in either
+    /// `password_error` (ask again) or `open_error` (nothing to do but
+    /// quit), each paired with a message in `statusMessage`.
+    fn tryOpen(self: *Model, password: []const u8) void {
         const s = store_mod.Store.open(self.gpa, self.io, self.profile_path, password) catch |err| {
             switch (err) {
-                error.WrongPassword => {
-                    self.password_error = true;
-                    return;
+                error.WrongPassword => self.password_error = true,
+                else => {
+                    self.open_error = true;
+                    self.setStatus("{s}", .{friendlyMessage(err)});
                 },
-                else => return err,
             }
+            return;
         };
         self.store = s;
-        try self.buildRows();
+        self.buildRows() catch |err| {
+            self.open_error = true;
+            self.setStatus("{s}", .{friendlyMessage(err)});
+            return;
+        };
         self.setStatus(
             "{d} logins ({d} tombstones skipped) -- / search, enter reveal, y copy, q quit",
             .{ self.store.?.entries.len, self.store.?.tombstones_skipped },
@@ -222,7 +252,7 @@ const Model = struct {
             const plain = s.reveal(index, &self.reveal_scratch, &self.reveal_out) catch |err| {
                 break :blk switch (err) {
                     error.LegacyTripleDes => "<3DES, unsupported>",
-                    else => "<decrypt failed>",
+                    else => "<could not decrypt>",
                 };
             };
             break :blk plain;
@@ -251,7 +281,7 @@ const Model = struct {
         }
         self.revealed_index = index;
         self.refreshRow(index) catch |err| {
-            self.setStatus("reveal failed: {t}", .{err});
+            self.setStatus("reveal failed: {s}", .{friendlyMessage(err)});
         };
     }
 
@@ -291,7 +321,7 @@ const Model = struct {
         const ptr = maybe_ptr orelse return;
         const self: *Model = @ptrCast(@alignCast(ptr));
         self.password_error = false;
-        try self.tryOpen(str);
+        self.tryOpen(str);
         self.password_field.clear();
         if (self.store != null) try ctx.requestFocus(self.list_view.widget());
         ctx.consumeAndRedraw();
@@ -301,7 +331,7 @@ const Model = struct {
         const idx = self.revealed_index orelse return;
         const s = &self.store.?;
         const plain = s.reveal(idx, &self.reveal_scratch, &self.reveal_out) catch |err| {
-            self.setStatus("copy failed: {t}", .{err});
+            self.setStatus("copy failed: {s}", .{friendlyMessage(err)});
             return;
         };
         try ctx.copyToClipboard(plain);
@@ -310,6 +340,10 @@ const Model = struct {
     }
 
     fn focusForMode(self: *Model) vxfw.Widget {
+        // In the open_error screen nothing but Model itself is drawn.
+        // Requesting focus on password_field there would ask the focus
+        // handler to find a widget that is not in the surface tree at all.
+        if (self.open_error) return self.widget();
         if (self.store == null) return self.password_field.widget();
         return switch (self.mode) {
             .normal => self.list_view.widget(),
@@ -333,7 +367,10 @@ const Model = struct {
                     ctx.quit = true;
                     return;
                 }
-                if (self.store == null) return; // routed to password_field by focus
+                if (self.store == null) {
+                    if (self.open_error and key.matches('q', .{})) ctx.quit = true;
+                    return; // otherwise routed to password_field by focus
+                }
 
                 if (self.mode == .search) {
                     if (key.matches(vaxis.Key.enter, .{}) or key.matches(vaxis.Key.escape, .{})) {
@@ -387,6 +424,9 @@ const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const max = ctx.max.size();
 
+        if (self.open_error) {
+            return self.drawOpenError(ctx, max);
+        }
         if (self.store == null) {
             return self.drawPasswordPrompt(ctx, max);
         }
@@ -418,6 +458,23 @@ const Model = struct {
         children[2] = prompt_surface;
         children[3] = status_surface;
 
+        return .{ .size = max, .widget = self.widget(), .buffer = &.{}, .children = children };
+    }
+
+    fn drawOpenError(self: *Model, ctx: vxfw.DrawContext, max: vxfw.Size) !vxfw.Surface {
+        const label: vxfw.Text = .{ .text = self.status_line.text, .softwrap = true };
+        const label_surface: vxfw.SubSurface = .{
+            .origin = .{ .row = 0, .col = 0 },
+            .surface = try label.draw(ctx.withConstraints(ctx.min, .{ .width = max.width, .height = 3 })),
+        };
+        const hint: vxfw.Text = .{ .text = "press q to quit", .softwrap = false };
+        const hint_surface: vxfw.SubSurface = .{
+            .origin = .{ .row = 4, .col = 0 },
+            .surface = try hint.draw(ctx.withConstraints(ctx.min, .{ .width = max.width, .height = 1 })),
+        };
+        const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
+        children[0] = label_surface;
+        children[1] = hint_surface;
         return .{ .size = max, .widget = self.widget(), .buffer = &.{}, .children = children };
     }
 
@@ -495,7 +552,7 @@ pub fn main(init: std.process.Init) !u8 {
     const model = try Model.init(gpa, io, profile);
     defer model.deinit();
 
-    try model.tryOpen("");
+    model.tryOpen("");
 
     var buffer: [1024]u8 = undefined;
     var app: vxfw.App = try .init(io, gpa, init.environ_map, &buffer);
