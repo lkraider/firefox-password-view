@@ -22,19 +22,16 @@ struct ContentView: View {
     }
 }
 
-/// Reads only `matchedIndices`. Copying a password, a loading spinner
-/// toggling, or any other `AppModel` change that this view does not read
-/// leaves this view's Observation tracking untouched, so `List` never
-/// re-diffs its up-to-1701-row data source for an unrelated event; it was
-/// re-diffing on every one of those before this view existed, since they
-/// all used to invalidate one `ContentView.body` that read everything.
+/// A thin wrapper so the doc comment's guarantee stays visible at the call
+/// site: EntryTableView reads `matchedIndices` (and `revealedIndex`) only
+/// inside its own Coordinator.reload, so copying a password, a loading
+/// spinner toggling, or any other AppModel change nothing here reads never
+/// touches the table.
 private struct EntryListView: View {
     let model: AppModel
 
     var body: some View {
-        List(model.matchedIndices, id: \.self) { index in
-            EntryRow(model: model, index: index)
-        }
+        EntryTableView(model: model)
     }
 }
 
@@ -86,86 +83,6 @@ private struct StatusBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal)
             .padding(.vertical, 4)
-    }
-}
-
-/// Reads its entry directly out of `model.entries`: that array is fully
-/// populated once when the profile opens, so this is a synchronous array
-/// index, not a fetch. Also reads `model.revealedIndex` directly, so
-/// Observation tracks both at this row's granularity: revealing one row
-/// invalidates only this view, not every row `List` currently has matched.
-private struct EntryRow: View {
-    let model: AppModel
-    let index: UInt32
-
-    private var entry: Entry? {
-        let i = Int(index)
-        return i < model.entries.count ? model.entries[i] : nil
-    }
-    private var isRevealed: Bool { model.revealedIndex == index }
-
-    var body: some View {
-        Group {
-            if let entry {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            if entry.isAccountCredential {
-                                Label("Account", systemImage: "person.crop.circle.badge.exclamationmark")
-                                    .labelStyle(.iconOnly)
-                                    .foregroundStyle(.orange)
-                                    .help("Firefox Sync account credential")
-                            }
-                            if entry.isExtension {
-                                Label("Extension", systemImage: "puzzlepiece.extension")
-                                    .labelStyle(.iconOnly)
-                                    .foregroundStyle(.secondary)
-                                    .help("Browser extension")
-                            }
-                            Text(entry.hostname)
-                                .font(.headline)
-                                .lineLimit(1)
-                        }
-                        Text(entry.username)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Group {
-                            if isRevealed {
-                                Text(model.revealedValue ?? "").textSelection(.enabled)
-                            } else {
-                                Text("••••••••")
-                            }
-                        }
-                        .font(.system(.body, design: .monospaced))
-                        .lineLimit(1)
-                    }
-                    Spacer()
-                    if isRevealed {
-                        Button(action: model.copyRevealed) {
-                            Image(systemName: "doc.on.doc")
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Copy password")
-                    }
-                }
-                // A fixed height, paired with lineLimit(1) on every line
-                // above, lets List's NSTableView backing use a uniform row
-                // height instead of measuring each row's SwiftUI content as
-                // it scrolls into view, which is what was stuttering on a
-                // fast scroll over 1701 rows.
-                .frame(height: 56)
-                .contentShape(Rectangle())
-                .onTapGesture { Task { await model.toggleReveal(index) } }
-            } else {
-                // matchedIndices only ever holds indices store.search()
-                // returned, which are always within entries.count; this
-                // branch means that invariant broke, not that data is
-                // still loading, so it stays empty rather than showing a
-                // spinner that would misreport a bug as normal latency.
-                EmptyView()
-            }
-        }
     }
 }
 
