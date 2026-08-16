@@ -5,6 +5,9 @@ zig/
 zig-out/
 zig-pkg/
 
+# Swift Package Manager build artifacts for macos/.
+macos/.build/
+
 .DS_Store
 
 # Anything extracted from a profile. Never commit key material.

@@ -1,0 +1,5 @@
+module CFfpw {
+    header "ffpw.h"
+    link "ffpw"
+    export *
+}
