@@ -24,11 +24,12 @@ struct FFPWStoreTests {
         let narrowed = await store.search("sub.example.org")
         #expect(narrowed.count == 1)
 
-        let entry = await store.entry(at: narrowed[0])
-        #expect(entry?.hostname == "https://sub.example.org")
-        #expect(entry?.username == "fixture-user-2")
-        #expect(entry?.isAccountCredential == false)
-        #expect(entry?.isExtension == false)
+        let entries = await store.entries()
+        let entry = entries[Int(narrowed[0])]
+        #expect(entry.hostname == "https://sub.example.org")
+        #expect(entry.username == "fixture-user-2")
+        #expect(entry.isAccountCredential == false)
+        #expect(entry.isExtension == false)
 
         switch await store.reveal(at: narrowed[0]) {
         case .success(let secret):
@@ -67,8 +68,8 @@ struct FFPWStoreTests {
         let matches = await store.search("")
         #expect(matches.count == 3)
 
-        let entry = await store.entry(at: matches[0])
-        #expect(entry?.username == "")
+        let entries = await store.entries()
+        #expect(entries[Int(matches[0])].username == "")
 
         switch await store.reveal(at: matches[0]) {
         case .success:
@@ -90,10 +91,11 @@ struct FFPWStoreTests {
         #expect(count == 5)
 
         let matches = await store.search("")
+        let entries = await store.entries()
         var accountCount = 0
         var extensionCount = 0
         for index in matches {
-            guard let entry = await store.entry(at: index) else { continue }
+            let entry = entries[Int(index)]
             if entry.isAccountCredential { accountCount += 1 }
             if entry.isExtension { extensionCount += 1 }
         }

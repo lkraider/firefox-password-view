@@ -9,11 +9,19 @@ final class AppModel {
 
     private var store = FFPWStore()
     private(set) var matchedIndices: [UInt32] = []
-    private(set) var entries: [UInt32: Entry] = [:]
+    /// Every entry's display data, fetched once when the profile opens.
+    /// Hostnames and usernames are already decrypted by then, so indexing
+    /// into this array is the whole cost of showing a row: no per-row fetch,
+    /// no per-row loading state.
+    private(set) var entries: [Entry] = []
 
     var searchText: String = "" {
-        didSet { Task { await runSearch() } }
+        didSet {
+            searchTask?.cancel()
+            searchTask = Task { await runSearch() }
+        }
     }
+    private var searchTask: Task<Void, Never>?
 
     private(set) var needsPassword = false
     var passwordInput = ""
@@ -48,7 +56,7 @@ final class AppModel {
         await store.close()
         store = FFPWStore()
         selectedProfile = profile
-        entries = [:]
+        entries = []
         matchedIndices = []
         searchText = ""
         passwordInput = ""
@@ -87,26 +95,18 @@ final class AppModel {
     private func loadEntries() async {
         isLoading = true
         defer { isLoading = false }
-        let count = await store.count()
-        statusMessage = "\(count) logins"
+        entries = await store.entries()
+        statusMessage = "\(entries.count) logins"
         await runSearch()
     }
 
+    /// A search superseded by a newer keystroke must not overwrite the
+    /// newer one's results if it happens to finish later, so this is
+    /// followed by a check.
     private func runSearch() async {
-        matchedIndices = await store.search(searchText)
-
-        // Fetched into a plain local dictionary and published once: setting
-        // `entries` inside this loop, one key at a time, made @Observable
-        // fire a change on every single assignment. SwiftUI re-evaluated the
-        // full 1701-row list on each of those, turning one search into
-        // O(n^2) work and pinning a core at 100% for the entire load.
-        var updated = entries
-        for index in matchedIndices where updated[index] == nil {
-            if let entry = await store.entry(at: index) {
-                updated[index] = entry
-            }
-        }
-        entries = updated
+        let indices = await store.search(searchText)
+        guard !Task.isCancelled else { return }
+        matchedIndices = indices
     }
 
     func toggleReveal(_ index: UInt32) async {

@@ -65,6 +65,15 @@ int main(int argc, char **argv) {
     printf("entry 0: hostname_len=%zu username_len=%zu flags=%u\n",
            entry.hostname_len, entry.username_len, entry.flags);
 
+    ffpw_entry all[16];
+    size_t all_total = ffpw_entries(store, all, 16);
+    printf("ffpw_entries: %zu total, entry 0 hostname_len=%zu\n",
+           all_total, all[0].hostname_len);
+    if (all[0].hostname_len != entry.hostname_len) {
+      fprintf(stderr, "FAIL: ffpw_entries disagrees with ffpw_entry_at\n");
+      return 1;
+    }
+
     char *secret = NULL;
     size_t secret_len = 0;
     st = ffpw_reveal(store, 0, &secret, &secret_len);

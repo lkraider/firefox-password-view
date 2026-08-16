@@ -215,13 +215,8 @@ fn flagsFor(kind: logins.Kind) u32 {
     };
 }
 
-export fn ffpw_entry_at(handle: ?*CStore, i: u32, out: ?*ffpw_entry) callconv(.c) ffpw_status {
-    const cstore = handle orelse return .err_range;
-    const s = cstore.store orelse return .err_needs_password;
-    if (i >= s.entries.len) return .err_range;
-    const o = out orelse return .err_range;
-    const e = s.entries[i];
-    o.* = .{
+fn toFFPWEntry(e: logins.Entry) ffpw_entry {
+    return .{
         .hostname = e.hostname.ptr,
         .hostname_len = e.hostname.len,
         .username = e.username.ptr,
@@ -229,7 +224,28 @@ export fn ffpw_entry_at(handle: ?*CStore, i: u32, out: ?*ffpw_entry) callconv(.c
         .time_password_changed = e.time_password_changed,
         .flags = flagsFor(e.kind),
     };
+}
+
+export fn ffpw_entry_at(handle: ?*CStore, i: u32, out: ?*ffpw_entry) callconv(.c) ffpw_status {
+    const cstore = handle orelse return .err_range;
+    const s = cstore.store orelse return .err_needs_password;
+    if (i >= s.entries.len) return .err_range;
+    const o = out orelse return .err_range;
+    o.* = toFFPWEntry(s.entries[i]);
     return .ok;
+}
+
+/// Hostnames and usernames are already decrypted by the time `ffpw_open`/
+/// `ffpw_unlock` returns; this is a struct copy per entry, meant to
+/// populate a whole list in one call rather than one call per row.
+export fn ffpw_entries(handle: ?*CStore, out: ?[*]ffpw_entry, cap: usize) callconv(.c) usize {
+    const cstore = handle orelse return 0;
+    const s = cstore.store orelse return 0;
+    if (out) |o| {
+        const n = @min(cap, s.entries.len);
+        for (s.entries[0..n], 0..) |e, i| o[i] = toFFPWEntry(e);
+    }
+    return s.entries.len;
 }
 
 export fn ffpw_reveal(handle: ?*CStore, i: u32, out: ?*?[*]u8, len: ?*usize) callconv(.c) ffpw_status {

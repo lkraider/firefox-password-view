@@ -89,41 +89,35 @@ actor FFPWStore {
     }
 
     /// Every matching index, not just a page: the list is virtualized by
-    /// SwiftUI, not by this call.
+    /// SwiftUI, not by this call. Sized to `count()` up front rather than
+    /// calling `ffpw_search` once just for the total and again to fill it,
+    /// since no query can match more entries than the store holds.
     func search(_ query: String) -> [UInt32] {
         guard let handle else { return [] }
+        let capacity = ffpw_count(handle)
+        guard capacity > 0 else { return [] }
+        var out = [UInt32](repeating: 0, count: capacity)
         let total = query.withCString { cQuery in
-            ffpw_search(handle, cQuery, query.utf8.count, nil, 0)
-        }
-        guard total > 0 else { return [] }
-        var out = [UInt32](repeating: 0, count: total)
-        let written = query.withCString { cQuery in
             out.withUnsafeMutableBufferPointer { buf in
                 ffpw_search(handle, cQuery, query.utf8.count, buf.baseAddress, buf.count)
             }
         }
-        return Array(out.prefix(written))
+        return Array(out.prefix(min(total, capacity)))
     }
 
-    func entry(at index: UInt32) -> Entry? {
-        guard let handle else { return nil }
-        var raw = ffpw_entry()
-        guard ffpw_entry_at(handle, index, &raw) == FFPW_OK else { return nil }
-        let hostname = raw.hostname.map { ptr in
-            String(decoding: UnsafeBufferPointer(start: UnsafeRawPointer(ptr).assumingMemoryBound(to: UInt8.self), count: raw.hostname_len), as: UTF8.self)
-        } ?? ""
-        let username = raw.username.map { ptr in
-            String(decoding: UnsafeBufferPointer(start: UnsafeRawPointer(ptr).assumingMemoryBound(to: UInt8.self), count: raw.username_len), as: UTF8.self)
-        } ?? ""
-        let flags = UInt32(raw.flags)
-        return Entry(
-            id: Int(index),
-            hostname: hostname,
-            username: username,
-            timePasswordChanged: raw.time_password_changed,
-            isAccountCredential: flags & UInt32(FFPW_FLAG_ACCOUNT_CREDENTIAL) != 0,
-            isExtension: flags & UInt32(FFPW_FLAG_EXTENSION) != 0
-        )
+    /// Every entry's display data (hostname, username, kind, timestamp) in
+    /// one round trip. Hostnames and usernames are already decrypted by the
+    /// time `open`/`unlock` returns, so this is a struct copy per entry, not
+    /// real work worth an async fetch or a loading state per row.
+    func entries() -> [Entry] {
+        guard let handle else { return [] }
+        let count = ffpw_count(handle)
+        guard count > 0 else { return [] }
+        var raw = [ffpw_entry](repeating: ffpw_entry(), count: count)
+        let written = raw.withUnsafeMutableBufferPointer { buf in
+            ffpw_entries(handle, buf.baseAddress, buf.count)
+        }
+        return (0..<min(written, count)).map { decodeEntry(raw[$0], id: $0) }
     }
 
     /// The caller must call `Secret.forget()` once done with the result,
@@ -164,6 +158,24 @@ struct Secret: @unchecked Sendable {
     func forget() async {
         await store.freeSecret(buf: buf, len: len)
     }
+}
+
+private func decodeEntry(_ raw: ffpw_entry, id: Int) -> Entry {
+    let hostname = raw.hostname.map { ptr in
+        String(decoding: UnsafeBufferPointer(start: UnsafeRawPointer(ptr).assumingMemoryBound(to: UInt8.self), count: raw.hostname_len), as: UTF8.self)
+    } ?? ""
+    let username = raw.username.map { ptr in
+        String(decoding: UnsafeBufferPointer(start: UnsafeRawPointer(ptr).assumingMemoryBound(to: UInt8.self), count: raw.username_len), as: UTF8.self)
+    } ?? ""
+    let flags = UInt32(raw.flags)
+    return Entry(
+        id: id,
+        hostname: hostname,
+        username: username,
+        timePasswordChanged: raw.time_password_changed,
+        isAccountCredential: flags & UInt32(FFPW_FLAG_ACCOUNT_CREDENTIAL) != 0,
+        isExtension: flags & UInt32(FFPW_FLAG_EXTENSION) != 0
+    )
 }
 
 func listProfiles() -> [Profile] {

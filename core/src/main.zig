@@ -57,4 +57,22 @@ pub fn main() !void {
         "kinds:     {d} account credential, {d} extension\n",
         .{ account_credentials, extensions },
     );
+
+    // Times the substring scan itself, not any string it matches: this
+    // never prints a hostname, username or password.
+    const search_iterations: usize = 1000;
+    const search_scratch = try gpa.alloc(usize, s.entries.len);
+    const search_start: std.Io.Clock.Timestamp = .now(io, .awake);
+    var iter: usize = 0;
+    while (iter < search_iterations) : (iter += 1) _ = s.search("example", search_scratch);
+    const search_ns: f64 = @floatFromInt(search_start.untilNow(io).raw.nanoseconds);
+    std.debug.print(
+        "search:    {d} calls over {d} entries in {d:.2} ms total, {d:.2} us/call\n",
+        .{
+            search_iterations,
+            s.entries.len,
+            search_ns / std.time.ns_per_ms,
+            search_ns / @as(f64, @floatFromInt(search_iterations)) / std.time.ns_per_us,
+        },
+    );
 }
