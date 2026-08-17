@@ -1,21 +1,21 @@
 import AppKit
 import SwiftUI
 
-/// Wraps NSTableView directly instead of SwiftUI's List. List's macOS
-/// backing NSTableView only supports self-sizing (usesAutomaticRowHeights),
-/// which estimates the height of rows it has never measured and corrects
-/// once it measures them; dragging the scrollbar knob jumps to an arbitrary
-/// position instantly, so that correction is visible as a stutter. A
-/// constant rowHeight here gives NSTableView O(1) scroll-position math
-/// (rowHeight × row count) with nothing left to estimate.
+/// Wraps NSTableView directly. SwiftUI's List backs onto an NSTableView
+/// that only supports self-sizing (usesAutomaticRowHeights). That estimates
+/// the height of every row it has never measured, then corrects each one on
+/// measuring it. Dragging the scrollbar knob jumps to an arbitrary position
+/// instantly, so those corrections show up as a stutter. A constant
+/// rowHeight here gives NSTableView O(1) scroll-position math (rowHeight ×
+/// row count) with nothing left to estimate.
 struct EntryTableView: NSViewRepresentable {
     let model: AppModel
 
     /// Passed in as values by EntryListView, whose body reads them. That
     /// read is what registers the Observation dependency SwiftUI uses to
     /// re-invoke `updateNSView`. Reading them here through `model` instead
-    /// registers nothing, because SwiftUI tracks reads made while it
-    /// evaluates a body, not reads made inside a representable's callbacks.
+    /// registers nothing. SwiftUI tracks the reads made while it evaluates a
+    /// body. A read inside a representable's callback goes untracked.
     ///
     /// A row's content needs all three. `entries` belongs here even though
     /// only `viewFor` reads it: AppModel publishes `entries` and
@@ -67,8 +67,8 @@ struct EntryTableView: NSViewRepresentable {
     /// reads exactly those two properties, so an unrelated AppModel change
     /// (statusMessage, isLoading, ...) still never reloads this table.
     /// @MainActor because it reads AppModel (MainActor-isolated) and drives
-    /// NSTableView (also MainActor-isolated); AppKit calls its data
-    /// source/delegate methods from the main thread regardless.
+    /// NSTableView (also MainActor-isolated). AppKit calls its data source
+    /// and delegate methods from the main thread regardless.
     @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var model: AppModel
@@ -84,9 +84,9 @@ struct EntryTableView: NSViewRepresentable {
         /// reveals toggling reloads just the one or two affected rows.
         ///
         /// `entries` is compared by count. AppModel only ever assigns it
-        /// wholesale, and the one path that swaps entries for a same-sized
-        /// set (selectProfile) clears matchedIndices on the way, which the
-        /// first comparison catches. An element-wise compare would run over
+        /// wholesale. The one path that swaps entries for a same-sized set,
+        /// selectProfile, clears matchedIndices on its way, and the first
+        /// comparison catches that. An element-wise compare would run over
         /// every entry on each keystroke to learn nothing.
         func reload(_ tableView: NSTableView, entries: [Entry], matchedIndices indices: [UInt32], revealedIndex revealed: UInt32?) {
             if indices != lastMatchedIndices || entries.count != lastEntries.count {
@@ -122,7 +122,7 @@ struct EntryTableView: NSViewRepresentable {
 
         /// The entry a row draws, from the snapshot the last reload ran
         /// against. nil makes EntryRowContent draw EmptyView at full row
-        /// height, which is what an empty list with the right row count is.
+        /// height, so the list shows blank rows and the right row count.
         func entry(forRow row: Int) -> Entry? {
             guard row < lastMatchedIndices.count else { return nil }
             let i = Int(lastMatchedIndices[row])
@@ -173,6 +173,18 @@ struct EntryRowContent: View {
     let onToggleReveal: () -> Void
     let onCopy: () -> Void
 
+    /// What VoiceOver reads for the row. The password stays out of it while
+    /// the row is masked, so moving through the list speaks no secrets.
+    private func label(for entry: Entry) -> String {
+        var parts: [String] = []
+        if entry.isAccountCredential { parts.append("Firefox Sync account credential") }
+        if entry.isExtension { parts.append("Browser extension") }
+        parts.append(entry.hostname)
+        if !entry.username.isEmpty { parts.append(entry.username) }
+        parts.append(isRevealed ? "password shown" : "password hidden")
+        return parts.joined(separator: ", ")
+    }
+
     var body: some View {
         Group {
             if let entry {
@@ -216,15 +228,35 @@ struct EntryRowContent: View {
                         }
                         .buttonStyle(.borderless)
                         .help("Copy password")
+                        .accessibilityLabel("Copy password")
                     }
                 }
                 .padding(.horizontal, 8)
                 .contentShape(Rectangle())
-                .onTapGesture(perform: onToggleReveal)
+                // A Button carries an accessibility action. The tap gesture
+                // this replaced carried none, so a physical mouse click was
+                // the only way to reveal a password. .plain draws the row
+                // exactly as before.
+                .modifier(RowActivation(onToggleReveal: onToggleReveal))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(label(for: entry))
+                .accessibilityHint(isRevealed ? "Hides the password" : "Reveals the password")
+                .accessibilityAddTraits(.isButton)
             } else {
                 EmptyView()
             }
         }
         .frame(height: Self.height)
+    }
+}
+
+/// Wraps the row in a plain Button. Split out so the row body keeps one
+/// level of nesting and the button styling stays in one place.
+private struct RowActivation: ViewModifier {
+    let onToggleReveal: () -> Void
+
+    func body(content: Content) -> some View {
+        Button(action: onToggleReveal) { content }
+            .buttonStyle(.plain)
     }
 }

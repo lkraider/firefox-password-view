@@ -71,7 +71,8 @@ wipes the buffers it owns.
 
 A profile synced to a Mozilla Account holds a `chrome://FirefoxAccounts`
 row. Its password is sync key material, so revealing it hands over the
-whole account. Both front ends mark that row.
+whole account. Both front ends mark that row and ask a second time before
+revealing it.
 
 ## Building
 

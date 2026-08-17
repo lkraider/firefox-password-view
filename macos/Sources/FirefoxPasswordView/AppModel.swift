@@ -15,9 +15,9 @@ final class AppModel {
     /// no per-row loading state.
     private(set) var entries: [Entry] = []
 
-    /// ContentView drives runSearch from a `.task(id: searchText)`, which
-    /// cancels the in-flight search and starts a new one whenever this
-    /// changes, so nothing here needs to track or cancel a Task by hand.
+    /// ContentView drives runSearch from a `.task(id: searchText)`. That
+    /// cancels the in-flight search and starts a new one on every change
+    /// here, so nothing in this file tracks or cancels a Task by hand.
     var searchText: String = ""
 
     private(set) var needsPassword = false
@@ -93,7 +93,7 @@ final class AppModel {
         isLoading = true
         defer { isLoading = false }
         entries = await store.entries()
-        statusMessage = "\(entries.count) logins"
+        statusMessage = entryCountMessage
         await runSearch()
     }
 
@@ -107,19 +107,41 @@ final class AppModel {
         matchedIndices = indices
     }
 
+    /// The entry a second activation reveals. The
+    /// `chrome://FirefoxAccounts` password is Mozilla Account sync key
+    /// material, so revealing it hands over the account. The TUI asks for a
+    /// second `enter` on that row. This does the same for a click, a
+    /// keypress and an accessibility action.
+    private(set) var pendingAccountReveal: UInt32?
+
     func toggleReveal(_ index: UInt32) async {
         if revealedIndex == index {
             await forgetRevealed()
             return
         }
+        let i = Int(index)
+        let isAccount = i < entries.count && entries[i].isAccountCredential
+        if isAccount, pendingAccountReveal != index {
+            pendingAccountReveal = index
+            statusMessage = "This reveals Firefox Sync account credentials. Activate again to confirm."
+            return
+        }
+        pendingAccountReveal = nil
         await forgetRevealed()
         switch await store.reveal(at: index) {
         case .success(let secret):
             revealedIndex = index
             revealedSecret = secret
+            // Clears the confirmation prompt once the row is showing, so
+            // the status bar stops asking for something already done.
+            statusMessage = entryCountMessage
         case .failure(let error):
             statusMessage = error.localizedDescription
         }
+    }
+
+    private var entryCountMessage: String {
+        "\(entries.count) logins"
     }
 
     func forgetRevealed() async {
@@ -128,6 +150,7 @@ final class AppModel {
         }
         revealedSecret = nil
         revealedIndex = nil
+        pendingAccountReveal = nil
     }
 
     func copyRevealed() {

@@ -14,6 +14,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - macOS app: the app opened two windows at launch, and both showed the
   same profile. Every window ran the profile load again against one
   shared store.
+- macOS app: revealing the `chrome://FirefoxAccounts` row took one
+  activation. It now asks a second time, as the TUI already did. That
+  password is Mozilla Account sync key material.
+
+### Changed
+
+- macOS app: each entry row is a button carrying an accessibility label
+  and action. Revealing and copying a password previously needed a mouse
+  click, since a tap gesture offers VoiceOver and the keyboard nothing to
+  activate.
 
 ## [1.0.0] - 2026-08-16
 
