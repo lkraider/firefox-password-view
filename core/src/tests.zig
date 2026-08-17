@@ -6,9 +6,19 @@ const oids = @import("oids.zig");
 const aescbc = @import("aescbc.zig");
 const pbes2 = @import("pbes2.zig");
 const sdr = @import("sdr.zig");
+const keydb = @import("keydb.zig");
 
 test {
     _ = @import("profiles.zig");
+    _ = @import("sqlitedb.zig");
+}
+
+/// keydb.load reads key4.db through std.Io. Each caller below opens a profile
+/// once, so a fresh Threaded per call costs one thread pool per fixture.
+fn loadKeys(path: []const u8, password: []const u8) !keydb.Keys {
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    return keydb.load(threaded.io(), path, password);
 }
 
 fn hex(comptime s: []const u8) [s.len / 2]u8 {
@@ -117,7 +127,6 @@ test "logins.scan marks a 3des-only entry legacy_3des" {
     // decryptField used to read keys.aes256 before parsing the blob, and
     // every entry then reported NoSdrKey. The blob names its own cipher, so
     // LegacyTripleDes is the answer that says what to do about it.
-    const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json =
         \\{"logins": [{
@@ -181,12 +190,11 @@ fn readFixtureLogins(gpa: std.mem.Allocator, path: []const u8) ![]u8 {
 }
 
 test "the fresh fixture decrypts every entry with an empty Primary Password" {
-    const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json = try readFixtureLogins(testing.allocator, "core/testdata/fresh/logins.json");
     defer testing.allocator.free(json);
 
-    const keys = try keydb.load("core/testdata/fresh/key4.db", "");
+    const keys = try loadKeys("core/testdata/fresh/key4.db", "");
     const result = try logins.scan(testing.allocator, json, keys);
     defer freeScanResult(testing.allocator, result);
 
@@ -201,15 +209,14 @@ test "the fresh fixture decrypts every entry with an empty Primary Password" {
 }
 
 test "the primary fixture needs its documented Primary Password" {
-    const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json = try readFixtureLogins(testing.allocator, "core/testdata/primary/logins.json");
     defer testing.allocator.free(json);
 
-    try testing.expectError(error.WrongPassword, keydb.load("core/testdata/primary/key4.db", ""));
-    try testing.expectError(error.WrongPassword, keydb.load("core/testdata/primary/key4.db", "wrong"));
+    try testing.expectError(error.WrongPassword, loadKeys("core/testdata/primary/key4.db", ""));
+    try testing.expectError(error.WrongPassword, loadKeys("core/testdata/primary/key4.db", "wrong"));
 
-    const keys = try keydb.load("core/testdata/primary/key4.db", "fixture-primary-password-1");
+    const keys = try loadKeys("core/testdata/primary/key4.db", "fixture-primary-password-1");
     const result = try logins.scan(testing.allocator, json, keys);
     defer freeScanResult(testing.allocator, result);
 
@@ -222,7 +229,6 @@ test "the primary fixture needs its documented Primary Password" {
 
 test "two-profiles resolves to the profile the install section names" {
     const profiles = @import("profiles.zig");
-    const keydb = @import("keydb.zig");
     const firefox_dir = "core/testdata/two-profiles";
 
     const ini = try readFixtureLogins(testing.allocator, firefox_dir ++ "/profiles.ini");
@@ -232,20 +238,19 @@ test "two-profiles resolves to the profile the install section names" {
     defer testing.allocator.free(profile);
     try testing.expectEqualStrings(firefox_dir ++ "/Profiles/real.default-release", profile);
 
-    const key4 = try std.fmt.allocPrintSentinel(testing.allocator, "{s}/key4.db", .{profile}, 0);
+    const key4 = try std.fmt.allocPrint(testing.allocator, "{s}/key4.db", .{profile});
     defer testing.allocator.free(key4);
-    _ = try keydb.load(key4, "");
+    _ = try loadKeys(key4, "");
 }
 
 test "the unmigrated fixture carries a 24-byte 3DES key and no AES-256 key" {
     // Written by Firefox 143.0.4, before Firefox 144 added the AES-256 key
     // and re-encrypted the store. Every entry here is des_ede3_cbc.
-    const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json = try readFixtureLogins(testing.allocator, "core/testdata/unmigrated/logins.json");
     defer testing.allocator.free(json);
 
-    const keys = try keydb.load("core/testdata/unmigrated/key4.db", "");
+    const keys = try loadKeys("core/testdata/unmigrated/key4.db", "");
     try testing.expect(keys.aes256 == null);
     try testing.expect(keys.des3 != null);
 
@@ -266,12 +271,11 @@ test "the migrated fixture carries both key rows and decrypts every entry" {
     // every entry to AES-256. Picking the first nssPrivate row by insertion
     // order returns the 3DES key and fails every entry's PKCS7 check. The
     // reader sorts by decrypted length to pick between them.
-    const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json = try readFixtureLogins(testing.allocator, "core/testdata/migrated/logins.json");
     defer testing.allocator.free(json);
 
-    const keys = try keydb.load("core/testdata/migrated/key4.db", "");
+    const keys = try loadKeys("core/testdata/migrated/key4.db", "");
     try testing.expect(keys.aes256 != null);
     try testing.expect(keys.des3 != null);
 
@@ -286,12 +290,11 @@ test "the migrated fixture carries both key rows and decrypts every entry" {
 }
 
 test "the sync-shaped fixture filters tombstones and labels the account and extension rows" {
-    const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json = try readFixtureLogins(testing.allocator, "core/testdata/sync-shaped/logins.json");
     defer testing.allocator.free(json);
 
-    const keys = try keydb.load("core/testdata/sync-shaped/key4.db", "");
+    const keys = try loadKeys("core/testdata/sync-shaped/key4.db", "");
     const result = try logins.scan(testing.allocator, json, keys);
     defer freeScanResult(testing.allocator, result);
 

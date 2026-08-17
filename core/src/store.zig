@@ -30,8 +30,8 @@ pub const Store = struct {
         errdefer arena_state.deinit();
         const gpa = arena_state.allocator();
 
-        const key4 = try std.fmt.allocPrintSentinel(gpa, "{s}/key4.db", .{profile_path}, 0);
-        const keys = try keydb.load(key4, password);
+        const key4 = try std.fmt.allocPrint(gpa, "{s}/key4.db", .{profile_path});
+        const keys = try keydb.load(io, key4, password);
 
         const cwd = std.Io.Dir.cwd();
         const logins_path = try std.fmt.allocPrint(gpa, "{s}/logins.json", .{profile_path});

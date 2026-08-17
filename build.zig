@@ -3,10 +3,9 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     // b.standardTargetOptions resolves the target here, then the line
     // below pins its cpu to a baseline. standardTargetOptions runs the
-    // native-SDK auto-detection for an empty query, and sqlite3 needs that
-    // detection to link. An explicit default_target passed to it skips the
-    // detection. core_lib_mod below hits the same link failure, for a
-    // different reason.
+    // native-SDK auto-detection for an empty query, and libc needs that
+    // detection to link on macOS. An explicit default_target passed to it
+    // skips the detection, and core_lib_mod below then fails to link.
     //
     // The baseline pin makes the binary reproducible across machines. A
     // "native" cpu resolves to the host's Apple Silicon generation, this
@@ -30,7 +29,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    translate_c.linkSystemLibrary("sqlite3", .{});
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("core/src/main.zig"),
@@ -39,7 +37,6 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
         .imports = &.{.{ .name = "c", .module = translate_c.createModule() }},
     });
-    exe_mod.linkSystemLibrary("sqlite3", .{});
 
     const exe = b.addExecutable(.{ .name = "ffpw-probe", .root_module = exe_mod });
     b.installArtifact(exe);
@@ -52,10 +49,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("core/src/tests.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
-        .imports = &.{.{ .name = "c", .module = translate_c.createModule() }},
     });
-    test_mod.linkSystemLibrary("sqlite3", .{});
     const tests = b.addTest(.{ .root_module = test_mod });
     const test_step = b.step("test", "Run the core and TUI tests");
     test_step.dependOn(&b.addRunArtifact(tests).step);
@@ -75,10 +69,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("core/src/root.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
-        .imports = &.{.{ .name = "c", .module = translate_c.createModule() }},
     });
-    core_mod.linkSystemLibrary("sqlite3", .{});
 
     const vaxis_dep = b.dependency("libvaxis", .{ .target = target, .optimize = optimize });
 
@@ -87,15 +78,18 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .strip = strip,
-        .link_libc = true,
         .imports = &.{
             .{ .name = "core", .module = core_mod },
             .{ .name = "vaxis", .module = vaxis_dep.module("vaxis") },
         },
     });
 
+    // The TUI serves macOS and Linux. Windows gets the Win32 front end under
+    // win/. tui/src/main.zig calls std.process.Args.Iterator.init, and that
+    // function is a compile error on Windows. It also reads HOME and joins
+    // the macOS profile path.
     const tui_exe = b.addExecutable(.{ .name = "ffpw", .root_module = tui_mod });
-    b.installArtifact(tui_exe);
+    if (target.result.os.tag != .windows) b.installArtifact(tui_exe);
 
     const run_tui = b.addRunArtifact(tui_exe);
     run_tui.step.dependOn(b.getInstallStep());
@@ -104,25 +98,16 @@ pub fn build(b: *std.Build) void {
 
     // C ABI static library. It shares `target` with everything else above,
     // so -Dtarget applies to it too. Releases ship a single aarch64-macos
-    // slice, and no lipo step runs. Resolving a fresh target query here
-    // would pass an explicit query, even one matching the host, and that
-    // skips the native-SDK auto-detection sqlite3 needs to link.
-    const lib_translate_c = b.addTranslateC(.{
-        .root_source_file = b.path("core/src/c.h"),
-        .target = target,
-        .optimize = optimize,
-    });
-    lib_translate_c.linkSystemLibrary("sqlite3", .{});
-
+    // slice, and no lipo step runs. core.zig calls c.getenv and allocates
+    // through std.heap.c_allocator, and Swift links libc regardless.
     const core_lib_mod = b.createModule(.{
         .root_source_file = b.path("core/src/core.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
         .link_libc = true,
-        .imports = &.{.{ .name = "c", .module = lib_translate_c.createModule() }},
+        .imports = &.{.{ .name = "c", .module = translate_c.createModule() }},
     });
-    core_lib_mod.linkSystemLibrary("sqlite3", .{});
 
     const core_lib = b.addLibrary(.{
         .name = "ffpw",
@@ -141,7 +126,6 @@ pub fn build(b: *std.Build) void {
     smoke_mod.addCSourceFile(.{ .file = b.path("core/test/smoke.c") });
     smoke_mod.addIncludePath(b.path("core/include"));
     smoke_mod.linkLibrary(core_lib);
-    smoke_mod.linkSystemLibrary("sqlite3", .{});
     const smoke = b.addExecutable(.{ .name = "ffpw-smoke", .root_module = smoke_mod });
     b.installArtifact(smoke);
 

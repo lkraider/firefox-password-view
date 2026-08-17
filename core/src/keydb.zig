@@ -1,7 +1,7 @@
 //! Reads key4.db and returns the SDR master keys.
 
 const std = @import("std");
-const c = @import("c");
+const sqlitedb = @import("sqlitedb.zig");
 const pbes2 = @import("pbes2.zig");
 
 pub const Error = error{
@@ -20,31 +20,24 @@ pub const Keys = struct {
     des3: ?[24]u8 = null,
 };
 
-const sdr_key_query =
-    \\select a11 from nssPrivate
-    \\ where a102 = x'F8000000000000000000000000000001'
-    \\   and a0 = x'00000004'
-    \\   and a11 is not null
-;
+/// NSS gives every SDR master key this object id.
+const cka_id = [_]u8{ 0xF8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01 };
 
-const meta_query = "select item1, item2 from metaData where id = 'password'";
+/// CKO_SECRET_KEY, stored big-endian in nssPrivate.a0.
+const cko_secret_key = [_]u8{ 0, 0, 0, 0x04 };
 
-fn columnBlob(stmt: *c.sqlite3_stmt, col: c_int) []const u8 {
-    const ptr = c.sqlite3_column_blob(stmt, col);
-    const len: usize = @intCast(c.sqlite3_column_bytes(stmt, col));
-    if (ptr == null or len == 0) return &.{};
-    const bytes: [*]const u8 = @ptrCast(ptr.?);
-    return bytes[0..len];
-}
+/// The widest record in key4.db is sqlite_master's row for nssPrivate. Its
+/// CREATE TABLE text runs to 1385 bytes in the fixtures. The data rows measure
+/// about 400 bytes.
+const row_buf_len = 4096;
 
-pub fn load(path: [:0]const u8, password: []const u8) Error!Keys {
-    var db: ?*c.sqlite3 = null;
-    // Read-only keeps this tool from touching a profile Firefox may be using.
-    if (c.sqlite3_open_v2(path.ptr, &db, c.SQLITE_OPEN_READONLY, null) != c.SQLITE_OK) {
-        _ = c.sqlite3_close(db);
-        return error.OpenFailed;
-    }
-    defer _ = c.sqlite3_close(db);
+pub fn load(io: std.Io, path: []const u8, password: []const u8) Error!Keys {
+    // Opening read-only keeps this tool from touching a profile Firefox may
+    // be using.
+    var db = sqlitedb.Db.open(io, path) catch return error.OpenFailed;
+    defer db.close();
+
+    var buf: [row_buf_len]u8 = undefined;
 
     var global_salt_buf: [64]u8 = undefined;
     var global_salt_len: usize = 0;
@@ -52,18 +45,28 @@ pub fn load(path: [:0]const u8, password: []const u8) Error!Keys {
     var check_len: usize = 0;
 
     {
-        var stmt: ?*c.sqlite3_stmt = null;
-        if (c.sqlite3_prepare_v2(db, meta_query, -1, &stmt, null) != c.SQLITE_OK) return error.QueryFailed;
-        defer _ = c.sqlite3_finalize(stmt);
-        if (c.sqlite3_step(stmt) != c.SQLITE_ROW) return error.MissingPasswordRow;
+        const meta = db.table("metaData", &buf) catch return error.QueryFailed;
+        const id_col = meta.columnIndex("id") catch return error.QueryFailed;
+        const item1_col = meta.columnIndex("item1") catch return error.QueryFailed;
+        const item2_col = meta.columnIndex("item2") catch return error.QueryFailed;
 
-        const salt = columnBlob(stmt.?, 0);
-        const check = columnBlob(stmt.?, 1);
-        if (salt.len > global_salt_buf.len or check.len > check_buf.len) return error.QueryFailed;
-        @memcpy(global_salt_buf[0..salt.len], salt);
-        @memcpy(check_buf[0..check.len], check);
-        global_salt_len = salt.len;
-        check_len = check.len;
+        // metaData also holds sig_key_* rows. In the primary fixture the
+        // password row comes second.
+        var it = meta.rows(&db, &buf);
+        const found = while (it.next() catch return error.QueryFailed) |row| {
+            const id = row.column(id_col) orelse continue;
+            if (!std.mem.eql(u8, id, "password")) continue;
+
+            const salt = row.column(item1_col) orelse &.{};
+            const check = row.column(item2_col) orelse &.{};
+            if (salt.len > global_salt_buf.len or check.len > check_buf.len) return error.QueryFailed;
+            @memcpy(global_salt_buf[0..salt.len], salt);
+            @memcpy(check_buf[0..check.len], check);
+            global_salt_len = salt.len;
+            check_len = check.len;
+            break true;
+        } else false;
+        if (!found) return error.MissingPasswordRow;
     }
 
     const global_salt = global_salt_buf[0..global_salt_len];
@@ -79,12 +82,19 @@ pub fn load(path: [:0]const u8, password: []const u8) Error!Keys {
 
     var keys: Keys = .{};
     {
-        var stmt: ?*c.sqlite3_stmt = null;
-        if (c.sqlite3_prepare_v2(db, sdr_key_query, -1, &stmt, null) != c.SQLITE_OK) return error.QueryFailed;
-        defer _ = c.sqlite3_finalize(stmt);
+        const nss = db.table("nssPrivate", &buf) catch return error.QueryFailed;
+        const a0_col = nss.columnIndex("a0") catch return error.QueryFailed;
+        const a11_col = nss.columnIndex("a11") catch return error.QueryFailed;
+        const a102_col = nss.columnIndex("a102") catch return error.QueryFailed;
 
-        while (c.sqlite3_step(stmt) == c.SQLITE_ROW) {
-            const wrapped = columnBlob(stmt.?, 0);
+        var it = nss.rows(&db, &buf);
+        while (it.next() catch return error.QueryFailed) |row| {
+            const id = row.column(a102_col) orelse continue;
+            if (!std.mem.eql(u8, id, &cka_id)) continue;
+            const class = row.column(a0_col) orelse continue;
+            if (!std.mem.eql(u8, class, &cko_secret_key)) continue;
+            const wrapped = row.column(a11_col) orelse continue;
+
             var out: [128]u8 = undefined;
             defer std.crypto.secureZero(u8, &out);
             const plain = pbes2.unwrap(wrapped, global_salt, password, &out) catch continue;

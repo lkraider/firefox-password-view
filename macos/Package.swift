@@ -14,7 +14,6 @@ let package = Package(
                 .unsafeFlags([
                     "-L../zig-out/lib",
                     "-lffpw",
-                    "-lsqlite3",
                 ])
             ]
         ),
