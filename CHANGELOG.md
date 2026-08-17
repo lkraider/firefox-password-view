@@ -2,6 +2,16 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- macOS app: the entry list could stay empty for the life of the window
+  while the status bar showed the right login count. The list is an
+  `NSTableView`, and the SwiftUI view wrapping it read nothing from
+  `AppModel`, so SwiftUI never re-ran it once the entries finished
+  loading. A second instance hit this every time.
+
 ## [1.0.0] - 2026-08-16
 
 First release. Binaries for Apple Silicon macOS.

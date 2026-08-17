@@ -11,6 +11,14 @@ import SwiftUI
 struct EntryTableView: NSViewRepresentable {
     let model: AppModel
 
+    /// Passed in as values by EntryListView, whose body reads them. That
+    /// read is what registers the Observation dependency SwiftUI uses to
+    /// re-invoke `updateNSView`. Reading them here through `model` instead
+    /// registers nothing, because SwiftUI tracks reads made while it
+    /// evaluates a body, not reads made inside a representable's callbacks.
+    let matchedIndices: [UInt32]
+    let revealedIndex: UInt32?
+
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
     }
@@ -42,12 +50,13 @@ struct EntryTableView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.model = model
         guard let tableView = scrollView.documentView as? NSTableView else { return }
-        context.coordinator.reload(tableView)
+        context.coordinator.reload(tableView, matchedIndices: matchedIndices, revealedIndex: revealedIndex)
     }
 
-    /// Reads model state only inside `reload`, which SwiftUI calls through
-    /// the same Observation tracking as a body, so an unrelated AppModel
-    /// change (statusMessage, isLoading, ...) never triggers a reload here.
+    /// `reload` takes the match set and the revealed index as arguments, so
+    /// it acts on the same snapshot that triggered the update. EntryListView
+    /// reads exactly those two properties, so an unrelated AppModel change
+    /// (statusMessage, isLoading, ...) still never reloads this table.
     /// @MainActor because it reads AppModel (MainActor-isolated) and drives
     /// NSTableView (also MainActor-isolated); AppKit calls its data
     /// source/delegate methods from the main thread regardless.
@@ -63,10 +72,7 @@ struct EntryTableView: NSViewRepresentable {
 
         /// Reloads everything only when the actual match set changed;
         /// reveals toggling reloads just the one or two affected rows.
-        func reload(_ tableView: NSTableView) {
-            let indices = model.matchedIndices
-            let revealed = model.revealedIndex
-
+        func reload(_ tableView: NSTableView, matchedIndices indices: [UInt32], revealedIndex revealed: UInt32?) {
             if indices != lastMatchedIndices {
                 lastMatchedIndices = indices
                 lastRevealedIndex = revealed

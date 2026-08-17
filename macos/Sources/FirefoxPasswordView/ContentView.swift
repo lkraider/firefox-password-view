@@ -31,16 +31,28 @@ struct ContentView: View {
     }
 }
 
-/// A thin wrapper so the doc comment's guarantee stays visible at the call
-/// site: EntryTableView reads `matchedIndices` (and `revealedIndex`) only
-/// inside its own Coordinator.reload, so copying a password, a loading
-/// spinner toggling, or any other AppModel change nothing here reads never
-/// touches the table.
-private struct EntryListView: View {
+/// Owns the table's dependency set. Reading `matchedIndices` and
+/// `revealedIndex` here is what makes SwiftUI re-invoke
+/// EntryTableView.updateNSView when either changes; a read inside the
+/// representable's own callbacks is not tracked. Keep both reads. Without
+/// them the table reloads once against an empty AppModel on a cold open and
+/// never again, because matchedIndices is assigned after ffpw_entries
+/// returns and nothing invalidates this view.
+///
+/// These two are also the whole dependency set, so statusMessage changing,
+/// a copy, or a loading spinner still leaves the table alone.
+///
+/// Internal rather than private so EntryListViewTests can evaluate this
+/// body inside withObservationTracking.
+struct EntryListView: View {
     let model: AppModel
 
     var body: some View {
-        EntryTableView(model: model)
+        EntryTableView(
+            model: model,
+            matchedIndices: model.matchedIndices,
+            revealedIndex: model.revealedIndex
+        )
     }
 }
 
