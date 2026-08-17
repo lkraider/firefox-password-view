@@ -9,6 +9,8 @@ const core = @import("core");
 const profiles = core.profiles;
 const store_mod = core.store;
 
+const cli = @import("args.zig");
+
 const masked_password = "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
 
 /// Every error store.zig and its dependencies can produce, given a message a
@@ -540,27 +542,91 @@ fn copyViaPbcopy(io: std.Io, gpa: std.mem.Allocator, text: []const u8) !void {
     _ = gpa;
 }
 
+fn readProfilesIni(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) ![]u8 {
+    const ini_path = try std.fs.path.join(gpa, &.{ firefox_dir, "profiles.ini" });
+    defer gpa.free(ini_path);
+    return std.Io.Dir.cwd().readFileAlloc(io, ini_path, gpa, .unlimited);
+}
+
+fn resolveDefaultProfile(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) ![]u8 {
+    const ini = try readProfilesIni(io, gpa, firefox_dir);
+    defer gpa.free(ini);
+    return profiles.resolveDefault(gpa, firefox_dir, ini);
+}
+
+/// One profile per line, name then path, so a shell can cut either field.
+fn listProfiles(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) !void {
+    const ini = try readProfilesIni(io, gpa, firefox_dir);
+    defer gpa.free(ini);
+    const list = try profiles.enumerate(gpa, firefox_dir, ini);
+    defer {
+        for (list) |p| {
+            gpa.free(p.name);
+            gpa.free(p.path);
+        }
+        gpa.free(list);
+    }
+
+    var buf: [4096]u8 = undefined;
+    var writer = std.Io.File.stdout().writer(io, &buf);
+    for (list) |p| try writer.interface.print("{s}\t{s}\n", .{ p.name, p.path });
+    try writer.interface.flush();
+}
+
+fn write(io: std.Io, file: std.Io.File, text: []const u8) !void {
+    var buf: [512]u8 = undefined;
+    var writer = file.writer(io, &buf);
+    try writer.interface.writeAll(text);
+    try writer.interface.flush();
+}
+
+/// Collects the arguments after the program name. Each slice points into
+/// the iterator's own storage. That storage lives as long as the process.
+fn collectArgs(gpa: std.mem.Allocator, argv: std.process.Args) ![]const []const u8 {
+    var it: std.process.Args.Iterator = .init(argv);
+    _ = it.skip();
+    var list: std.ArrayList([]const u8) = .empty;
+    errdefer list.deinit(gpa);
+    while (it.next()) |arg| try list.append(gpa, arg);
+    return list.toOwnedSlice(gpa);
+}
+
 pub fn main(init: std.process.Init) !u8 {
     const io = init.io;
     const gpa = init.gpa;
 
+    const argv = try collectArgs(gpa, init.minimal.args);
+    defer gpa.free(argv);
+    const options = cli.parse(argv) catch |err| {
+        const message = switch (err) {
+            error.MissingValue => "ffpw: --profile needs a path\n",
+            error.UnknownFlag => "ffpw: unrecognized argument, see ffpw --help\n",
+        };
+        try write(io, .stderr(), message);
+        return 2;
+    };
+    if (options.help) {
+        try write(io, .stdout(), cli.usage);
+        return 0;
+    }
+
     const home = init.environ_map.get("HOME") orelse {
-        var stderr_buf: [64]u8 = undefined;
-        var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buf);
-        try stderr_writer.interface.writeAll("HOME is not set\n");
-        try stderr_writer.interface.flush();
+        try write(io, .stderr(), "HOME is not set\n");
         return 1;
     };
     const firefox_dir = try std.fs.path.join(gpa, &.{ home, "Library/Application Support/Firefox" });
     defer gpa.free(firefox_dir);
 
-    const cwd = std.Io.Dir.cwd();
-    const ini_path = try std.fs.path.join(gpa, &.{ firefox_dir, "profiles.ini" });
-    defer gpa.free(ini_path);
-    const ini = try cwd.readFileAlloc(io, ini_path, gpa, .unlimited);
-    defer gpa.free(ini);
+    if (options.list_profiles) {
+        try listProfiles(io, gpa, firefox_dir);
+        return 0;
+    }
 
-    const profile = try profiles.resolveDefault(gpa, firefox_dir, ini);
+    // Duped so one `free` covers both this and resolveDefault's allocation.
+    const profile = if (options.profile_path) |path|
+        try gpa.dupe(u8, path)
+    else
+        try resolveDefaultProfile(io, gpa, firefox_dir);
     defer gpa.free(profile);
 
     const model = try Model.init(gpa, io, profile);

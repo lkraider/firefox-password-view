@@ -57,7 +57,17 @@ pub fn build(b: *std.Build) void {
     });
     test_mod.linkSystemLibrary("sqlite3", .{});
     const tests = b.addTest(.{ .root_module = test_mod });
-    b.step("test", "Run the core tests").dependOn(&b.addRunArtifact(tests).step);
+    const test_step = b.step("test", "Run the core and TUI tests");
+    test_step.dependOn(&b.addRunArtifact(tests).step);
+
+    // The TUI's argument parser. The tui module would pull vaxis and
+    // sqlite3 into the link. Rooting this at args.zig keeps both out.
+    const args_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("tui/src/args.zig"),
+        .target = target,
+        .optimize = optimize,
+    }) });
+    test_step.dependOn(&b.addRunArtifact(args_tests).step);
 
     // TUI. core/src/root.zig is the module a front end imports
     // through. A relative import cannot cross from tui/src into core/src.
