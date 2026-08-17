@@ -32,10 +32,9 @@ final class AppModel {
     private(set) var isLoading = false
 
     /// Tries every enumerated profile in turn and stops at the first one
-    /// that actually has a key4.db (opens or needs a password), the same
-    /// distinction ffpw_open reports. A profile Firefox has abandoned, like
-    /// the one the legacy Default=1 flag can point at, is skipped rather
-    /// than shown as the initial pick.
+    /// carrying a key4.db, meaning it opens or asks for a password. That is
+    /// the distinction ffpw_open reports. This skips a profile Firefox has
+    /// abandoned, such as the one the legacy Default=1 flag can point at.
     func start() async {
         profiles = listProfiles()
         for profile in profiles {

@@ -1,4 +1,4 @@
-//! Resolves which profile Firefox actually uses.
+//! Resolves which profile Firefox opens.
 
 const std = @import("std");
 
@@ -98,7 +98,7 @@ pub const Profile = struct {
 /// Every `[ProfileN]` section in profiles.ini, in file order. A test machine
 /// can carry a profile with no key4.db at all (an abandoned pre-migration
 /// profile), so a viewer that only ever opens `resolveDefault`'s pick cannot
-/// explain what it is showing; this lets a front end offer the rest.
+/// explain what it is showing. This lets a front end offer the rest.
 pub fn enumerate(gpa: std.mem.Allocator, firefox_dir: []const u8, ini: []const u8) std.mem.Allocator.Error![]Profile {
     const sections = try parseSections(gpa, ini);
     defer freeSections(gpa, sections);

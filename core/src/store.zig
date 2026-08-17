@@ -1,6 +1,6 @@
 //! Owns one profile's decrypted state: the arena every string in `entries`
 //! lives in, the keys `reveal` decrypts with, and the search filter. Both
-//! front ends match identically because the filter lives here, not in
+//! front ends match identically because the filter lives here, outside
 //! either one of them.
 
 const std = @import("std");
@@ -20,7 +20,7 @@ pub const Store = struct {
 
     /// Opens `profile_path`/key4.db and `profile_path`/logins.json, decrypts
     /// every username, and keeps every password's SDR blob for `reveal`.
-    /// `backing` is only used while opening; everything returned lives in
+    /// `backing` is only used while opening. Everything returned lives in
     /// the arena this `Store` owns from here on.
     pub fn open(
         backing: std.mem.Allocator,
@@ -52,8 +52,8 @@ pub const Store = struct {
     }
 
     /// Wipes every decrypted username before freeing the arena that holds
-    /// them. `reveal` never puts a password in this arena; it decrypts
-    /// straight into the caller's buffer, which the caller must wipe.
+    /// them. `reveal` puts no password in this arena. It decrypts straight
+    /// into the caller's buffer, and the caller wipes it.
     pub fn deinit(self: *Store) void {
         for (self.entries) |e| {
             std.crypto.secureZero(u8, @constCast(e.username));
@@ -63,7 +63,7 @@ pub const Store = struct {
 
     /// Case-insensitive substring match over hostname and username. Writes
     /// at most `out.len` matching indices, in entry order, and returns the
-    /// total number that matched, which may exceed `out.len`. An empty
+    /// total number that matched. That total may exceed `out.len`. An empty
     /// query matches every entry.
     pub fn search(self: *const Store, query: []const u8, out: []usize) usize {
         var count: usize = 0;

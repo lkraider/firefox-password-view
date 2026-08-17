@@ -58,7 +58,7 @@ pub fn build(b: *std.Build) void {
     const tests = b.addTest(.{ .root_module = test_mod });
     b.step("test", "Run the core tests").dependOn(&b.addRunArtifact(tests).step);
 
-    // TUI. core/src/root.zig is the module boundary a front end imports
+    // TUI. core/src/root.zig is the module a front end imports
     // through. A relative import cannot cross from tui/src into core/src.
     const core_mod = b.createModule(.{
         .root_source_file = b.path("core/src/root.zig"),

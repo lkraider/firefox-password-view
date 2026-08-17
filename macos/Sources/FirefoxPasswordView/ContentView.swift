@@ -63,7 +63,7 @@ private struct ProfilePicker: View {
     var body: some View {
         // Gated on selectedProfile so the Picker's binding never starts out
         // nil: profiles.count > 1 is already true before start() picks one,
-        // and nil has no tag among the options below, which AppKit logs as
+        // and nil has no tag among the options below. AppKit logs that as
         // an invalid Picker configuration.
         if model.profiles.count > 1, model.selectedProfile != nil {
             Picker("Profile", selection: Binding(

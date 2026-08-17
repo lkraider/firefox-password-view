@@ -1,6 +1,6 @@
-//! Exports the C ABI declared in core/include/ffpw.h. This is the boundary
-//! Swift and C link against; nothing here is reused by the TUI, which talks
-//! to store.zig directly.
+//! Exports the C ABI declared in core/include/ffpw.h. Swift and C link
+//! against this file. The TUI imports store.zig directly and uses none of
+//! it.
 
 const std = @import("std");
 const c = @import("c");
@@ -43,14 +43,14 @@ const CStore = struct {
 };
 
 /// mem.Allocator.free ignores the length it is given for this allocator
-/// specifically (it frees by pointer, via libc free()), which is why
-/// ffpw_reveal and ffpw_secret_free can hand a caller a shorter length than
-/// the store's own arena allocations without corrupting anything.
+/// specifically. It frees by pointer, through libc free(). So ffpw_reveal
+/// and ffpw_secret_free can hand a caller a shorter length than the store's
+/// own arena allocations, and the allocation still frees intact.
 const gpa = std.heap.c_allocator;
 
-/// ffpw_open's first attempt always uses an empty password, so a
-/// WrongPassword there means "this profile needs a real one", not that a
-/// caller-supplied password was wrong.
+/// ffpw_open's first attempt always uses an empty password. WrongPassword
+/// there means the profile has a Primary Password of its own. No caller
+/// supplied one yet.
 fn mapOpenError(err: anyerror) ffpw_status {
     return switch (err) {
         error.WrongPassword => .err_needs_password,
@@ -59,7 +59,7 @@ fn mapOpenError(err: anyerror) ffpw_status {
 }
 
 /// ffpw_unlock's password came from the caller, so WrongPassword here means
-/// exactly that, not that a password is merely needed.
+/// that password was wrong.
 fn mapUnlockError(err: anyerror) ffpw_status {
     return switch (err) {
         error.WrongPassword => .err_wrong_password,
@@ -235,9 +235,9 @@ export fn ffpw_entry_at(handle: ?*CStore, i: u32, out: ?*ffpw_entry) callconv(.c
     return .ok;
 }
 
-/// Hostnames and usernames are already decrypted by the time `ffpw_open`/
-/// `ffpw_unlock` returns; this is a struct copy per entry, meant to
-/// populate a whole list in one call rather than one call per row.
+/// Hostnames and usernames are already decrypted by the time `ffpw_open`
+/// or `ffpw_unlock` returns. This costs one struct copy per entry, and it
+/// fills a whole list in one call. One call per row is the alternative.
 export fn ffpw_entries(handle: ?*CStore, out: ?[*]ffpw_entry, cap: usize) callconv(.c) usize {
     const cstore = handle orelse return 0;
     const s = cstore.store orelse return 0;
@@ -267,8 +267,8 @@ export fn ffpw_reveal(handle: ?*CStore, i: u32, out: ?*?[*]u8, len: ?*usize) cal
         };
     };
 
-    // Sized to exactly plain.len, so a caller that later frees exactly
-    // len bytes wipes the whole allocation, not a truncated prefix of it.
+    // Sized to exactly plain.len. A caller that later frees exactly len
+    // bytes then wipes every byte of the allocation.
     const owned = cstore.gpa.alloc(u8, plain.len) catch return .err_oom;
     @memcpy(owned, plain);
     out_ptr.* = owned.ptr;

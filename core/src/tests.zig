@@ -90,7 +90,7 @@ test "sdr blob parses key id, cipher and iv" {
     try testing.expectEqual(@as(usize, 16), blob.ciphertext.len);
 }
 
-test "a 3des entry reports the migration error rather than decrypting" {
+test "a 3des entry reports the migration error and returns no plaintext" {
     // Same shape with the des-ede3-cbc OID and an 8-byte IV.
     const buf = hex("303a0410f8000000000000000000000000000001" ++
         "3014" ++ "06082a864886f70d0307" ++ "04080001020304050607" ++
@@ -112,11 +112,11 @@ fn freeScanResult(gpa: std.mem.Allocator, result: anytype) void {
     gpa.free(result.entries);
 }
 
-test "logins.scan keeps a legacy_3des entry rather than dropping it for NoSdrKey" {
+test "logins.scan marks a 3des-only entry legacy_3des" {
     // A profile Firefox 144 has never opened carries no AES-256 key at all
     // (regression: decryptField used to ask for keys.aes256 before parsing
-    // the blob, so every entry surfaced as the generic NoSdrKey instead of
-    // the more useful LegacyTripleDes).
+    // the blob, so every entry surfaced as the generic NoSdrKey. The blob
+    // names its own cipher, so the correct report is LegacyTripleDes).
     const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json =
@@ -139,10 +139,11 @@ test "logins.scan keeps a legacy_3des entry rather than dropping it for NoSdrKey
 test "pbes2 seeds with SHA384 when the global salt is 48 bytes" {
     // Captured from a real Firefox 152 profile after setting a synthetic
     // Primary Password ("fixture-primary-password-1"). A never-initialized
-    // token carries a 20-byte SHA1-length global salt; setting a Primary
+    // token carries a 20-byte SHA1-length global salt. Setting a Primary
     // Password for the first time replaces it with this 48-byte SHA384-length
-    // one, and NSS seeds with SHA384 instead of SHA1 to match. Getting this
-    // wrong makes the correct password look wrong (regression: it did).
+    // one. NSS picks its seed hash by the salt's length, so a 48-byte salt
+    // seeds with SHA384. Seeding with SHA1 makes the correct password look
+    // wrong (regression: it did).
     const global_salt = hex("661C366FD887564582212421FC6E1388A4F37714EFA99166B3AE3D767079E607" ++
         "6FFA02718064165695084DAE22EDB6E9");
     const item2 = hex("308182306E06092A864886F70D01050D3061304206092A864886F70D01050C30" ++
@@ -219,7 +220,7 @@ test "the primary fixture needs its documented Primary Password" {
     }
 }
 
-test "two-profiles resolves to the profile the install section names, not Default=1" {
+test "two-profiles resolves to the profile the install section names" {
     const profiles = @import("profiles.zig");
     const keydb = @import("keydb.zig");
     const firefox_dir = "core/testdata/two-profiles";
@@ -238,7 +239,7 @@ test "two-profiles resolves to the profile the install section names, not Defaul
 
 test "the unmigrated fixture carries a real 24-byte 3DES key and no AES-256 key" {
     // Written by Firefox 143.0.4, before Firefox 144 added the AES-256 key
-    // and re-encrypted the store. Every entry here is genuinely des_ede3_cbc.
+    // and re-encrypted the store. Every entry here is des_ede3_cbc.
     const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json = try readFixtureLogins(testing.allocator, "core/testdata/unmigrated/logins.json");
@@ -263,8 +264,8 @@ test "the migrated fixture carries both key rows and decrypts every entry" {
     // leaves the original 24-byte 3DES key row in place under the same
     // CKA_ID and adds the 32-byte AES-256 row alongside it, and re-encrypts
     // every entry to AES-256. Picking the first nssPrivate row by insertion
-    // order returns the 3DES key and fails every entry's PKCS7 check; the
-    // reader must sort by decrypted length instead.
+    // order returns the 3DES key and fails every entry's PKCS7 check. The
+    // reader sorts by decrypted length to pick between them.
     const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json = try readFixtureLogins(testing.allocator, "core/testdata/migrated/logins.json");
@@ -295,7 +296,8 @@ test "the sync-shaped fixture filters tombstones and labels the account and exte
     defer freeScanResult(testing.allocator, result);
 
     // 7 rows in logins.json: 3 ordinary logins, 1 account row, 1 extension
-    // row, and 2 tombstones. Tombstones are filtered, not counted.
+    // row, and 2 tombstones. The store filters the tombstones out before
+    // it counts.
     try testing.expectEqual(@as(usize, 5), result.entries.len);
     try testing.expectEqual(@as(usize, 2), result.tombstones_skipped);
     try testing.expectEqual(@as(usize, 0), result.malformed);
@@ -421,7 +423,7 @@ test "profiles.enumerate on two-profiles finds the one with no key4.db" {
 // `zig build test --fuzz` mutates these real DER blobs (an AES-256 SDR
 // blob, a des_ede3_cbc one, and one decoded straight out of the fresh
 // fixture's encryptedUsername) and feeds every mutation to der.Reader's two
-// real call paths. Nothing here should ever panic; a parse error is a
+// real call paths. Nothing here should ever panic. A parse error is a
 // correct answer for bytes that were never valid to begin with.
 //
 // `--fuzz` itself does not run on the pinned Zig 0.16.0: test_runner.zig

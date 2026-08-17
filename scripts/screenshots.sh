@@ -191,17 +191,17 @@ shoot_app() {
 
     # One instance at a time, so window_id_for_pid has a single candidate and
     # the capture cannot pick up somebody else's window. Until b3bb120 a
-    # second instance also drew an empty entry list, which put a screenshot
-    # with no rows in docs/images/.
+    # second instance also drew an empty entry list, and that put a
+    # screenshot with no rows in docs/images/.
     if pgrep -f "FirefoxPasswordView.app/Contents/MacOS" >/dev/null 2>&1; then
         echo "quitting a running FirefoxPasswordView first"
         pkill -f "FirefoxPasswordView.app/Contents/MacOS" || true
         sleep 2
     fi
 
-    # open, rather than running Contents/MacOS/FirefoxPasswordView directly:
-    # a process started outside LaunchServices never registers and its window
-    # cannot become key. --env points the app at the fixture profile.
+    # open, so LaunchServices registers the process. Running
+    # Contents/MacOS/FirefoxPasswordView directly leaves it unregistered and
+    # its window unable to become key. --env points the app at the fixture.
     open -n --env "HOME=$sandbox" -a "$app_bundle"
 
     id=""

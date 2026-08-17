@@ -25,8 +25,8 @@ let package = Package(
             linkerSettings: [
                 // Only Command Line Tools is installed here (no full Xcode),
                 // and swift-testing's runtime lives under its Frameworks
-                // directory rather than a place the dynamic linker searches
-                // by default.
+                // directory. The dynamic linker does not search there by
+                // default.
                 .unsafeFlags([
                     "-Xlinker", "-rpath",
                     "-Xlinker", "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",

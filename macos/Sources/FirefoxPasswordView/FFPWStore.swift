@@ -34,7 +34,7 @@ extension FFPWError: LocalizedError {
         case .openFailed: "Could not open key4.db for this profile."
         case .needsPassword: "This profile needs its Primary Password."
         case .wrongPassword: "Wrong Primary Password. Try again."
-        case .legacy3DES: "This entry is still 3DES, which this app cannot decrypt."
+        case .legacy3DES: "This entry is still 3DES. This app cannot decrypt it."
         case .outOfMemory: "Out of memory."
         case .io: "Could not read this profile's files."
         case .range: "That entry does not exist."
@@ -88,8 +88,8 @@ actor FFPWStore {
         return ffpw_count(handle)
     }
 
-    /// Every matching index, not just a page: the list is virtualized by
-    /// SwiftUI, not by this call. Sized to `count()` up front rather than
+    /// Every matching index. SwiftUI virtualizes the list, so this call
+    /// hands back the whole match set. Sized to `count()` up front, and
     /// calling `ffpw_search` once just for the total and again to fill it,
     /// since no query can match more entries than the store holds.
     func search(_ query: String) -> [UInt32] {
@@ -139,7 +139,7 @@ actor FFPWStore {
 }
 
 /// A revealed password. Holds the raw buffer alive until `forget()` runs, so
-/// the store can wipe it rather than leaving it to Swift's own deallocation.
+/// the store wipes it. Swift's own deallocation leaves the bytes behind.
 /// `@unchecked Sendable`: the raw pointer only ever crosses into `store`,
 /// which is itself an actor and re-serializes access to it.
 struct Secret: @unchecked Sendable {

@@ -140,7 +140,7 @@ core/src/
   logins.zig     decrypts and classifies logins.json entries
   store.zig      owns the arena, the keys, the entries, and the search filter
   core.zig       exports the C ABI both front ends link, core/include/ffpw.h
-  root.zig       the module boundary a front end imports through
+  root.zig       the module a front end imports through
   main.zig       validation probe
   c.h            sqlite3 and stdlib headers for addTranslateC
   tests.zig      NIST and DER vectors, and fixture round-trips

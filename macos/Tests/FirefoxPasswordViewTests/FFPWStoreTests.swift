@@ -2,8 +2,8 @@ import Testing
 @testable import FirefoxPasswordView
 
 /// Exercises the Swift bridging layer against the same fixtures the Zig
-/// tests use. The crypto itself is proven at the Zig level; this only
-/// checks that FFPWStore marshals the C ABI correctly.
+/// tests use. The Zig tests prove the crypto. This only checks that
+/// FFPWStore marshals the C ABI correctly.
 struct FFPWStoreTests {
     @Test func freshFixtureOpensAndDecrypts() async {
         let store = FFPWStore()

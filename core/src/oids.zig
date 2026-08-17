@@ -23,7 +23,8 @@ pub fn eql(a: []const u8, b: []const u8) bool {
 }
 
 /// Cipher used for a single value. Firefox 144 migrated existing stores to
-/// aes256_cbc; des_ede3_cbc appears only in profiles that version has not opened.
+/// aes256_cbc. des_ede3_cbc appears only in a profile that version has
+/// never opened.
 pub const Cipher = enum {
     aes256_cbc,
     des_ede3_cbc,

@@ -55,16 +55,16 @@ ffpw_status ffpw_unlock(ffpw_store *, const char *pw, size_t pw_len);
 void        ffpw_close(ffpw_store *);
 
 size_t      ffpw_count(ffpw_store *);
-/* Writes at most cap indices. Returns the total match count, which may
-   exceed cap. */
+/* Writes at most cap indices. Returns the total match count. That total
+   may exceed cap. */
 size_t      ffpw_search(ffpw_store *, const char *q, size_t q_len,
                         uint32_t *out, size_t cap);
 ffpw_status ffpw_entry_at(ffpw_store *, uint32_t i, ffpw_entry *out);
 /* Writes at most cap entries, in index order starting at 0. Returns the
- * total entry count, which may exceed cap. Hostnames and usernames are
+ * total entry count. That total may exceed cap. Hostnames and usernames are
  * already decrypted by the time ffpw_open/ffpw_unlock returns, so this is
  * a struct copy per entry, meant to populate a whole list in one call
- * instead of one ffpw_entry_at call per row. */
+ * in one call. One ffpw_entry_at call per row is the alternative. */
 size_t      ffpw_entries(ffpw_store *, ffpw_entry *out, size_t cap);
 
 ffpw_status ffpw_reveal(ffpw_store *, uint32_t i, char **out, size_t *len);

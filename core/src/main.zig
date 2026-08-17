@@ -15,8 +15,8 @@ pub fn main() !void {
     defer threaded.deinit();
     const io = threaded.io();
 
-    // std.process.Environ needs the process init block, which a plain main()
-    // does not receive. libc is already linked for sqlite3.
+    // std.process.Environ needs the process init block. A plain main()
+    // never receives one. libc is already linked for sqlite3.
     const home_c = c.getenv("HOME") orelse return error.NoHome;
     const home = std.mem.span(home_c);
     const firefox_dir = try std.fs.path.join(gpa, &.{ home, "Library/Application Support/Firefox" });
@@ -58,8 +58,8 @@ pub fn main() !void {
         .{ account_credentials, extensions },
     );
 
-    // Times the substring scan itself, not any string it matches: this
-    // never prints a hostname, username or password.
+    // Times the substring scan itself. It prints no hostname, username or
+    // password.
     const search_iterations: usize = 1000;
     const search_scratch = try gpa.alloc(usize, s.entries.len);
     const search_start: std.Io.Clock.Timestamp = .now(io, .awake);

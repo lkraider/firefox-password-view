@@ -1,4 +1,4 @@
-//! The module boundary front ends outside core/src import through.
+//! The module front ends outside core/src import through.
 
 pub const store = @import("store.zig");
 pub const profiles = @import("profiles.zig");

@@ -47,7 +47,7 @@ pub const Reader = struct {
         var len: usize = first;
         if (first & 0x80 != 0) {
             const n = first & 0x7f;
-            // A zero count is the indefinite form, which DER forbids. Anything
+            // A zero count is the indefinite form. DER forbids it. Anything
             // above four length octets exceeds every structure Firefox writes.
             if (n == 0 or n > 4) return error.UnsupportedLength;
             if (r.buf.len - r.pos < n) return error.Truncated;

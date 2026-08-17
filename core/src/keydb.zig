@@ -14,7 +14,7 @@ pub const Error = error{
 
 /// A profile can carry both keys at once. Firefox 144 adds the 32-byte key and
 /// leaves the 24-byte one in place, so the row count alone cannot pick between
-/// them; the decrypted length does.
+/// them. The decrypted length does.
 pub const Keys = struct {
     aes256: ?[32]u8 = null,
     des3: ?[24]u8 = null,

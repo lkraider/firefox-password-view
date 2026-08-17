@@ -18,7 +18,7 @@ const masked_password = "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
 fn friendlyMessage(err: anyerror) []const u8 {
     return switch (err) {
         error.WrongPassword => "wrong Primary Password",
-        error.LegacyTripleDes => "this entry is still 3DES, which this app cannot decrypt",
+        error.LegacyTripleDes => "this entry is still 3DES and this app cannot decrypt it",
         error.OpenFailed => "could not open key4.db for this profile",
         error.MissingPasswordRow, error.NoSdrKey, error.QueryFailed => "this profile's key4.db is missing data this app expects",
         error.NoLoginsArray => "logins.json is not in the shape this app expects",
@@ -109,7 +109,7 @@ const SecretField = struct {
 
 /// One line in the list: "kind marker  hostname  username  password". Text
 /// lives here so ListView's builder can hand out a stable pointer without an
-/// arena of its own; only `.text` is replaced, in place, when reveal state
+/// arena of its own. Only `.text` is replaced, in place, when reveal state
 /// changes.
 const Row = struct {
     text: vxfw.Text = .{ .text = "", .softwrap = false },
@@ -141,7 +141,7 @@ const Model = struct {
 
     /// Plain letters must stay typeable in the search field, so `y`/`q` and
     /// the other single-key shortcuts only fire in `.normal` mode, when the
-    /// list rather than the search field holds focus. `/` enters `.search`;
+    /// list holds focus and the search field does not. `/` enters `.search`.
     /// `enter` or `escape` in the search field returns to `.normal`.
     mode: enum { normal, search } = .normal,
 
@@ -489,7 +489,7 @@ const Model = struct {
     }
 
     /// Every screen is one Surface holding a fixed set of already-drawn
-    /// children; this is the one place that assembles it.
+    /// children. This is the one place that assembles it.
     fn composite(self: *Model, ctx: vxfw.DrawContext, size: vxfw.Size, children: []const vxfw.SubSurface) !vxfw.Surface {
         return .{
             .size = size,
@@ -502,7 +502,7 @@ const Model = struct {
 
 /// Best-effort local clipboard write. libvaxis's OSC 52 write (via
 /// ctx.copyToClipboard) never reports failure even when the terminal
-/// ignores it, so this always also shells out to pbcopy, which works on
+/// ignores it, so this always also shells out to pbcopy. pbcopy works on
 /// every macOS terminal regardless of OSC 52 support.
 fn copyViaPbcopy(io: std.Io, gpa: std.mem.Allocator, text: []const u8) !void {
     var child = std.process.spawn(io, .{

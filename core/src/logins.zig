@@ -6,7 +6,7 @@ const keydb = @import("keydb.zig");
 
 /// Distinguishes rows a viewer must treat differently from an ordinary saved
 /// login. `account_credential`'s password is Mozilla Account sync key
-/// material, not a site password; revealing it surrenders the account.
+/// material. Revealing it surrenders the whole account.
 pub const Kind = enum { normal, account_credential, extension };
 
 pub const Entry = struct {
@@ -29,7 +29,7 @@ pub const Entry = struct {
 pub const ScanResult = struct {
     entries: []Entry,
     /// Sync deletion tombstones (`deleted: true`, no hostname, no encrypted
-    /// fields). Skipped rather than counted as entries.
+    /// fields). Skipped, and left out of the entry count.
     tombstones_skipped: usize = 0,
     /// A row that is not a tombstone but is missing hostname or the
     /// encrypted fields anyway. Not expected on a real profile.
@@ -44,7 +44,7 @@ fn classify(hostname: []const u8) Kind {
 
 /// Decrypts a base64 SDR field into `out`. Checks the cipher before asking
 /// for a key, so a profile carrying only a 3DES key still reports
-/// `LegacyTripleDes` instead of the unhelpful `NoSdrKey`.
+/// `LegacyTripleDes`. `NoSdrKey` names the wrong cause.
 fn decryptField(b64: []const u8, keys: keydb.Keys, scratch: []u8, out: []u8) ![]u8 {
     const decoder = std.base64.standard.Decoder;
     const n = try decoder.calcSizeForSlice(b64);
