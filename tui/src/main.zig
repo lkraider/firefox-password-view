@@ -8,28 +8,11 @@ const vxfw = vaxis.vxfw;
 const core = @import("core");
 const profiles = core.profiles;
 const store_mod = core.store;
+const friendlyMessage = core.messages.friendly;
 
 const cli = @import("args.zig");
 
 const masked_password = "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
-
-/// Every error store.zig and its dependencies can produce, given a message a
-/// person can act on. The store has no fixed error set (it is `!T`
-/// throughout), so the fallback branch catches the rest. A DER or PBES2
-/// parse error lands there, and the answer to one is a bug report.
-fn friendlyMessage(err: anyerror) []const u8 {
-    return switch (err) {
-        error.WrongPassword => "wrong Primary Password",
-        error.LegacyTripleDes => "this entry is still 3DES and this app cannot decrypt it",
-        error.OpenFailed => "could not open key4.db for this profile",
-        error.MissingPasswordRow, error.NoSdrKey, error.QueryFailed => "this profile's key4.db is missing data this app expects",
-        error.NoLoginsArray => "logins.json is not in the shape this app expects",
-        error.OutOfMemory => "out of memory",
-        error.FileNotFound => "logins.json or key4.db is missing",
-        error.AccessDenied => "permission denied reading this profile",
-        else => "could not read this profile (unexpected error)",
-    };
-}
 
 /// A password prompt with its own tiny buffer, drawn as one bullet per
 /// grapheme typed. Kept separate from vxfw.TextField so the plaintext
