@@ -10,7 +10,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   while the status bar showed the right login count. The list is an
   `NSTableView`, and the SwiftUI view wrapping it read nothing from
   `AppModel`, so SwiftUI never re-ran it once the entries finished
-  loading. A second instance hit this every time.
+  loading. Roughly one launch in six.
+- macOS app: the app opened two windows at launch, and both showed the
+  same profile. Every window ran the profile load again against one
+  shared store.
 
 ## [1.0.0] - 2026-08-16
 

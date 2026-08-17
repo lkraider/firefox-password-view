@@ -16,6 +16,15 @@ struct EntryTableView: NSViewRepresentable {
     /// re-invoke `updateNSView`. Reading them here through `model` instead
     /// registers nothing, because SwiftUI tracks reads made while it
     /// evaluates a body, not reads made inside a representable's callbacks.
+    ///
+    /// A row's content needs all three. `entries` belongs here even though
+    /// only `viewFor` reads it: AppModel publishes `entries` and
+    /// `matchedIndices` separately, and ContentView's
+    /// `.task(id: searchText)` can land `matchedIndices` first, while
+    /// `entries` is still empty. Every row then builds with `entry: nil` and
+    /// draws EmptyView at full row height. Without `entries` tracked, the
+    /// assignment that follows reloads nothing and the rows stay blank.
+    let entries: [Entry]
     let matchedIndices: [UInt32]
     let revealedIndex: UInt32?
 
@@ -50,7 +59,7 @@ struct EntryTableView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.model = model
         guard let tableView = scrollView.documentView as? NSTableView else { return }
-        context.coordinator.reload(tableView, matchedIndices: matchedIndices, revealedIndex: revealedIndex)
+        context.coordinator.reload(tableView, entries: entries, matchedIndices: matchedIndices, revealedIndex: revealedIndex)
     }
 
     /// `reload` takes the match set and the revealed index as arguments, so
@@ -63,6 +72,7 @@ struct EntryTableView: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var model: AppModel
+        private var lastEntries: [Entry] = []
         private var lastMatchedIndices: [UInt32] = []
         private var lastRevealedIndex: UInt32?
 
@@ -70,10 +80,17 @@ struct EntryTableView: NSViewRepresentable {
             self.model = model
         }
 
-        /// Reloads everything only when the actual match set changed;
+        /// Reloads everything when the match set or the entries changed;
         /// reveals toggling reloads just the one or two affected rows.
-        func reload(_ tableView: NSTableView, matchedIndices indices: [UInt32], revealedIndex revealed: UInt32?) {
-            if indices != lastMatchedIndices {
+        ///
+        /// `entries` is compared by count. AppModel only ever assigns it
+        /// wholesale, and the one path that swaps entries for a same-sized
+        /// set (selectProfile) clears matchedIndices on the way, which the
+        /// first comparison catches. An element-wise compare would run over
+        /// every entry on each keystroke to learn nothing.
+        func reload(_ tableView: NSTableView, entries: [Entry], matchedIndices indices: [UInt32], revealedIndex revealed: UInt32?) {
+            if indices != lastMatchedIndices || entries.count != lastEntries.count {
+                lastEntries = entries
                 lastMatchedIndices = indices
                 lastRevealedIndex = revealed
                 tableView.reloadData()
@@ -103,6 +120,15 @@ struct EntryTableView: NSViewRepresentable {
             lastMatchedIndices.count
         }
 
+        /// The entry a row draws, from the snapshot the last reload ran
+        /// against. nil makes EntryRowContent draw EmptyView at full row
+        /// height, which is what an empty list with the right row count is.
+        func entry(forRow row: Int) -> Entry? {
+            guard row < lastMatchedIndices.count else { return nil }
+            let i = Int(lastMatchedIndices[row])
+            return i < lastEntries.count ? lastEntries[i] : nil
+        }
+
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
             let identifier = NSUserInterfaceItemIdentifier("EntryCell")
             let hostingView: NSHostingView<EntryRowContent>
@@ -117,8 +143,7 @@ struct EntryTableView: NSViewRepresentable {
             // so `row` is always in range for it.
             guard row < lastMatchedIndices.count else { return hostingView }
             let index = lastMatchedIndices[row]
-            let i = Int(index)
-            let entry: Entry? = i < model.entries.count ? model.entries[i] : nil
+            let entry = entry(forRow: row)
             // Both of these come from the model, so the flag and the secret
             // below always describe the same entry. Taking the flag from
             // lastRevealedIndex instead pairs one row's flag with another

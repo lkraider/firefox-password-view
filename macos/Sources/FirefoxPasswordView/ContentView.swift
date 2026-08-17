@@ -50,6 +50,7 @@ struct EntryListView: View {
     var body: some View {
         EntryTableView(
             model: model,
+            entries: model.entries,
             matchedIndices: model.matchedIndices,
             revealedIndex: model.revealedIndex
         )

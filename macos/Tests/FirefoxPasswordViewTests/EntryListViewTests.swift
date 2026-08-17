@@ -61,15 +61,41 @@ struct EntryListViewTests {
         table.delegate = coordinator
 
         // The cold open: the first update runs before the entries land.
-        coordinator.reload(table, matchedIndices: [], revealedIndex: nil)
+        coordinator.reload(table, entries: [], matchedIndices: [], revealedIndex: nil)
         #expect(table.numberOfRows == 0)
 
-        coordinator.reload(table, matchedIndices: model.matchedIndices, revealedIndex: nil)
+        coordinator.reload(table, entries: model.entries, matchedIndices: model.matchedIndices, revealedIndex: nil)
         #expect(table.numberOfRows == 5)
 
         // Revealing changes no index, and takes the per-row reload branch.
         // The rows have to survive it.
-        coordinator.reload(table, matchedIndices: model.matchedIndices, revealedIndex: model.matchedIndices[0])
+        coordinator.reload(table, entries: model.entries, matchedIndices: model.matchedIndices, revealedIndex: model.matchedIndices[0])
         #expect(table.numberOfRows == 5)
+    }
+
+    /// The launch race: ContentView's `.task(id: searchText)` can publish
+    /// matchedIndices while AppModel.loadEntries has not assigned entries
+    /// yet. Every row then builds with `entry: nil` and draws EmptyView at
+    /// full height, so the list looks empty while the status bar counts the
+    /// logins. The entries assignment that follows has to reload the table.
+    @Test func entriesArrivingAfterTheIndicesReloadsTheRows() async {
+        let model = AppModel()
+        await model.selectProfile(Profile(id: 0, path: fixture("sync-shaped")))
+
+        let coordinator = EntryTableView.Coordinator(model: model)
+        let table = NSTableView()
+        table.addTableColumn(NSTableColumn(identifier: .init("main")))
+        table.dataSource = coordinator
+        table.delegate = coordinator
+
+        // Indices first, entries still empty.
+        coordinator.reload(table, entries: [], matchedIndices: model.matchedIndices, revealedIndex: nil)
+        #expect(table.numberOfRows == 5)
+        #expect(coordinator.entry(forRow: 0) == nil, "no entry is available yet")
+
+        // Entries land. The row count is unchanged, so only tracking
+        // entries can trigger the reload that fills the rows.
+        coordinator.reload(table, entries: model.entries, matchedIndices: model.matchedIndices, revealedIndex: nil)
+        #expect(coordinator.entry(forRow: 0) != nil, "rows still render EmptyView after entries arrived")
     }
 }
