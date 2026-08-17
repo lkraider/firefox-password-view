@@ -30,20 +30,29 @@ developer.
 
 ## Using it
 
-Run `ffpw`. It takes no arguments. It reads `profiles.ini` under
-`~/Library/Application Support/Firefox` and opens the profile your Firefox
-uses. It prompts for a Primary Password when the profile has one.
+Run `ffpw`. It reads `profiles.ini` under `~/Library/Application
+Support/Firefox` and opens the profile your Firefox uses. It prompts for a
+Primary Password when the profile has one.
 
 | Key | Does |
 |---|---|
 | `/` | Enter the search field. `enter` or `escape` leaves it. |
 | `↑` `↓`, `k` `j` | Move through the list. |
 | `enter` | Reveal the selected password. Press again to hide it. |
-| `y` | Copy the selected password. |
+| `y` | Copy the selected password. The row stays masked. |
 | `q`, `ctrl-c` | Quit. |
 
-Passwords stay masked until you press `enter`, and only the selected one
-is shown. The macOS app shows the same data under the same rules.
+To open another profile:
+
+```
+ffpw --list-profiles       # one profile per line, name then path
+ffpw --profile <path>      # open that directory
+```
+
+Passwords stay masked until you press `enter`, and only the selected one is
+shown. The macOS app shows the same data under the same rules. Each row
+there carries a copy button that leaves the row masked, and a revealed
+password masks itself again after 30 seconds.
 
 ## Limits
 
@@ -62,7 +71,9 @@ It cannot read these profiles:
 ## Security
 
 Copying marks the clipboard entry `org.nspasteboard.ConcealedType` and
-clears it after 30 seconds. There are no network calls and no telemetry.
+clears it after 30 seconds. Copying never puts the password on screen. In
+the macOS app a revealed password masks itself after the same 30 seconds.
+There are no network calls and no telemetry.
 
 Anyone who can read your files or your memory already has this data.
 `key4.db` is readable by your own user, and Firefox exposes the same

@@ -2,7 +2,18 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.1.0] - 2026-08-17
+
+### Added
+
+- Both front ends copy a password without revealing it. The macOS app puts
+  a copy button on every row. The TUI's `y` copies the row under the
+  cursor. The row stays masked on both paths, and the decrypted buffer is
+  wiped before the call returns.
+- macOS app: a revealed password masks itself after 30 seconds, matching
+  the clipboard's own timeout.
+- TUI: `--profile <path>` opens that profile, `--list-profiles` prints
+  every profile in `profiles.ini`, and `--help` prints the usage.
 
 ### Fixed
 
@@ -24,6 +35,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and action. A tap gesture drew the row before. A tap gesture carries no
   accessibility action, so revealing and copying a password took a mouse
   click.
+- The `chrome://FirefoxAccounts` row asks for a second activation before a
+  copy, as it already did before a reveal. Each action asks on its own.
+- TUI: the 3DES message reads "this entry is still 3DES and this app cannot
+  decrypt it".
 
 ## [1.0.0] - 2026-08-16
 
