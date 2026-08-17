@@ -30,6 +30,24 @@ final class AppModel {
     private(set) var statusMessage = ""
     private(set) var isLoading = false
 
+    /// Injected so the test suite can read back what a copy wrote without
+    /// putting a fixture password on the developer's pasteboard.
+    @ObservationIgnored private let writeToClipboard: @MainActor (String) -> Void
+
+    /// A revealed password masks itself again after this long, the same 30
+    /// seconds `ClipboardWriter` gives a copied one. The tests pass a short
+    /// one.
+    @ObservationIgnored private let revealTimeout: Duration
+    @ObservationIgnored private var hideTask: Task<Void, Never>?
+
+    init(
+        clipboard: @escaping @MainActor (String) -> Void = ClipboardWriter.copy,
+        revealTimeout: Duration = .seconds(30)
+    ) {
+        writeToClipboard = clipboard
+        self.revealTimeout = revealTimeout
+    }
+
     /// profiles.ini lists profiles Firefox abandoned, including the one the
     /// legacy Default=1 flag points at. Those have no key4.db, and ffpw_open
     /// fails on them. A profile that has one either opens or reports
@@ -103,28 +121,33 @@ final class AppModel {
     }
 
     /// The `chrome://FirefoxAccounts` password is Mozilla Account sync key
-    /// material. Whoever reads it holds the account. Both front ends ask for
-    /// a second activation on that row.
-    private(set) var pendingAccountReveal: UInt32?
+    /// material. Whoever reads it holds the account. Revealing and copying
+    /// both ask for a second activation on that row, and each clears this
+    /// before it acts, so the next action asks again.
+    private(set) var pendingAccountAction: UInt32?
+
+    private func isAccountRow(_ index: UInt32) -> Bool {
+        let i = Int(index)
+        return i < entries.count && entries[i].isAccountCredential
+    }
 
     func toggleReveal(_ index: UInt32) async {
         if revealedIndex == index {
             await forgetRevealed()
             return
         }
-        let i = Int(index)
-        let isAccount = i < entries.count && entries[i].isAccountCredential
-        if isAccount, pendingAccountReveal != index {
-            pendingAccountReveal = index
+        if isAccountRow(index), pendingAccountAction != index {
+            pendingAccountAction = index
             statusMessage = "This reveals Firefox Sync account credentials. Activate again to confirm."
             return
         }
-        pendingAccountReveal = nil
+        pendingAccountAction = nil
         await forgetRevealed()
         switch await store.reveal(at: index) {
         case .success(let secret):
             revealedIndex = index
             revealedSecret = secret
+            startHideTimer(for: index)
             // Drops the confirmation prompt this reveal answered.
             statusMessage = entryCountMessage
         case .failure(let error):
@@ -137,17 +160,56 @@ final class AppModel {
     }
 
     func forgetRevealed() async {
+        hideTask?.cancel()
+        hideTask = nil
         if let secret = revealedSecret {
             await secret.forget()
         }
         revealedSecret = nil
         revealedIndex = nil
-        pendingAccountReveal = nil
+        pendingAccountAction = nil
     }
 
-    func copyRevealed() {
-        guard let value = revealedSecret?.value else { return }
-        ClipboardWriter.copy(value)
-        statusMessage = "Copied"
+    /// A person walks away from a revealed password and it stays on screen
+    /// until something else hides it. This masks the row `revealTimeout`
+    /// after the reveal. Each reveal restarts the count, and
+    /// `forgetRevealed` cancels it.
+    private func startHideTimer(for index: UInt32) {
+        hideTask?.cancel()
+        let timeout = revealTimeout
+        hideTask = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled else { return }
+            await self?.hideRevealedAfterTimeout(index)
+        }
+    }
+
+    /// Hides only the row the timer was started for. A reveal of another row
+    /// starts its own timer, and this one has nothing left to do.
+    private func hideRevealedAfterTimeout(_ index: UInt32) async {
+        guard revealedIndex == index else { return }
+        await forgetRevealed()
+        statusMessage = entryCountMessage
+    }
+
+    /// The password never reaches the screen here. The core decrypts on
+    /// demand, the clipboard takes the string, and `forget()` wipes the C
+    /// buffer before this returns. `revealedIndex` is left alone, so the row
+    /// stays masked.
+    func copy(at index: UInt32) async {
+        if isAccountRow(index), pendingAccountAction != index {
+            pendingAccountAction = index
+            statusMessage = "This copies Firefox Sync account credentials to the clipboard. Activate again to confirm."
+            return
+        }
+        pendingAccountAction = nil
+        switch await store.reveal(at: index) {
+        case .success(let secret):
+            writeToClipboard(secret.value)
+            await secret.forget()
+            statusMessage = "Copied"
+        case .failure(let error):
+            statusMessage = error.localizedDescription
+        }
     }
 }

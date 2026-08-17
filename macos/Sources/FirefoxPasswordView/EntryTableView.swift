@@ -159,7 +159,7 @@ struct EntryTableView: NSViewRepresentable {
                 isRevealed: isRevealed,
                 revealedValue: isRevealed ? model.revealedValue : nil,
                 onToggleReveal: { Task { await model.toggleReveal(index) } },
-                onCopy: { model.copyRevealed() }
+                onCopy: { Task { await model.copy(at: index) } }
             )
             return hostingView
         }
@@ -205,15 +205,14 @@ struct EntryRowContent: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(label(for: entry))
                         .accessibilityHint(isRevealed ? "Hides the password" : "Reveals the password")
-                    if isRevealed {
-                        Button(action: onCopy) {
-                            Image(systemName: "doc.on.doc")
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Copy password")
-                        .accessibilityLabel("Copy password")
-                        .padding(.trailing, 8)
+                    Button(action: onCopy) {
+                        Image(systemName: "doc.on.doc")
                     }
+                    .buttonStyle(.borderless)
+                    .help("Copy password")
+                    .accessibilityLabel("Copy password")
+                    .accessibilityHint("Copies without showing the password")
+                    .padding(.trailing, 8)
                 }
             }
         }
