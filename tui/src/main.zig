@@ -1,5 +1,5 @@
-//! One-screen TUI: search over the profile's logins, reveal one password at
-//! a time, copy it, and wipe on quit.
+//! One-screen TUI. It searches the profile's logins, reveals one password at
+//! a time, copies the row under the cursor, and wipes on quit.
 
 const std = @import("std");
 const vaxis = @import("vaxis");
@@ -146,7 +146,11 @@ const Model = struct {
     mode: enum { normal, search } = .normal,
 
     revealed_index: ?usize = null,
-    confirm_account_reveal: bool = false,
+    /// The `chrome://FirefoxAccounts` password is Mozilla Account sync key
+    /// material. Revealing it and copying it each ask for a second press,
+    /// and each records which action was asked about, so pressing `y` and
+    /// then `enter` asks twice.
+    pending_account_action: ?enum { reveal, copy } = null,
     reveal_scratch: [8192]u8 = undefined,
     reveal_out: [8192]u8 = undefined,
 
@@ -270,7 +274,7 @@ const Model = struct {
     fn hideRevealed(self: *Model) void {
         const idx = self.revealed_index orelse return;
         self.revealed_index = null;
-        self.confirm_account_reveal = false;
+        self.pending_account_action = null;
         std.crypto.secureZero(u8, &self.reveal_out);
         self.refreshRow(idx) catch {};
     }
@@ -327,15 +331,26 @@ const Model = struct {
         ctx.consumeAndRedraw();
     }
 
+    /// Copies the row under the cursor, leaving it masked. `reveal_out`
+    /// holds the plaintext for the two clipboard writes. A revealed row owns
+    /// that buffer and wipes it in `hideRevealed`. Every other case wipes it
+    /// here.
     fn copySelected(self: *Model, ctx: *vxfw.EventContext) !void {
-        const idx = self.revealed_index orelse return;
+        const idx = self.selectedEntryIndex() orelse return;
         const s = &self.store.?;
+        if (s.entries[idx].kind == .account_credential and self.pending_account_action != .copy) {
+            self.pending_account_action = .copy;
+            self.setStatus("this copies Firefox Sync account credentials to the clipboard -- press y again to confirm", .{});
+            return;
+        }
+        self.pending_account_action = null;
         const plain = s.reveal(idx, &self.reveal_scratch, &self.reveal_out) catch |err| {
             self.setStatus("copy failed: {s}", .{friendlyMessage(err)});
             return;
         };
         try ctx.copyToClipboard(plain);
         try copyViaPbcopy(self.io, self.gpa, plain);
+        if (self.revealed_index == null) std.crypto.secureZero(u8, &self.reveal_out);
         self.setStatus("copied", .{});
     }
 
@@ -395,12 +410,12 @@ const Model = struct {
                 if (key.matches(vaxis.Key.enter, .{})) {
                     if (self.selectedEntryIndex()) |idx| {
                         const kind = self.store.?.entries[idx].kind;
-                        if (kind == .account_credential and !self.confirm_account_reveal and self.revealed_index != idx) {
-                            self.confirm_account_reveal = true;
+                        if (kind == .account_credential and self.pending_account_action != .reveal and self.revealed_index != idx) {
+                            self.pending_account_action = .reveal;
                             self.setStatus("this reveals Firefox Sync account credentials -- press enter again to confirm", .{});
                             return ctx.consumeAndRedraw();
                         }
-                        self.confirm_account_reveal = false;
+                        self.pending_account_action = null;
                         if (self.revealed_index == idx) {
                             self.hideRevealed();
                         } else {
