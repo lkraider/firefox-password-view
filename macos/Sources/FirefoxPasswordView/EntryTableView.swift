@@ -94,8 +94,13 @@ struct EntryTableView: NSViewRepresentable {
             }
         }
 
+        /// Answers from `lastMatchedIndices`, the snapshot the last reload
+        /// ran against. Reading `model.matchedIndices` here reports a count
+        /// AppKit has not been told to reload for, so between an AppModel
+        /// write and the reload that follows it, the row count and the rows
+        /// come from different match sets.
         func numberOfRows(in tableView: NSTableView) -> Int {
-            model.matchedIndices.count
+            lastMatchedIndices.count
         }
 
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -108,10 +113,16 @@ struct EntryTableView: NSViewRepresentable {
                 hostingView.identifier = identifier
             }
 
-            guard row < model.matchedIndices.count else { return hostingView }
-            let index = model.matchedIndices[row]
+            // Indexed against the same snapshot numberOfRows answered from,
+            // so `row` is always in range for it.
+            guard row < lastMatchedIndices.count else { return hostingView }
+            let index = lastMatchedIndices[row]
             let i = Int(index)
             let entry: Entry? = i < model.entries.count ? model.entries[i] : nil
+            // Both of these come from the model, so the flag and the secret
+            // below always describe the same entry. Taking the flag from
+            // lastRevealedIndex instead pairs one row's flag with another
+            // row's secret whenever a reveal lands before its reload does.
             let isRevealed = model.revealedIndex == index
             let model = self.model
             hostingView.rootView = EntryRowContent(

@@ -1,3 +1,4 @@
+import AppKit
 import Observation
 import Testing
 @testable import FirefoxPasswordView
@@ -45,5 +46,30 @@ struct EntryListViewTests {
 
         #expect(model.matchedIndices.count == 1, "runSearch did not narrow the match set")
         #expect(flag.fired, "EntryListView.body must read matchedIndices, or the table never reloads after a cold open")
+    }
+
+    /// `numberOfRows` answers from the coordinator's own snapshot, so these
+    /// counts also assert that each reload updated it.
+    @Test func reloadFillsTheTableWhenIndicesArriveAfterAnEmptyUpdate() async {
+        let model = AppModel()
+        await model.selectProfile(Profile(id: 0, path: fixture("sync-shaped")))
+
+        let coordinator = EntryTableView.Coordinator(model: model)
+        let table = NSTableView()
+        table.addTableColumn(NSTableColumn(identifier: .init("main")))
+        table.dataSource = coordinator
+        table.delegate = coordinator
+
+        // The cold open: the first update runs before the entries land.
+        coordinator.reload(table, matchedIndices: [], revealedIndex: nil)
+        #expect(table.numberOfRows == 0)
+
+        coordinator.reload(table, matchedIndices: model.matchedIndices, revealedIndex: nil)
+        #expect(table.numberOfRows == 5)
+
+        // Revealing changes no index, and takes the per-row reload branch.
+        // The rows have to survive it.
+        coordinator.reload(table, matchedIndices: model.matchedIndices, revealedIndex: model.matchedIndices[0])
+        #expect(table.numberOfRows == 5)
     }
 }
