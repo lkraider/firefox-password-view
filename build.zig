@@ -132,6 +132,16 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| run_tui.addArgs(args);
     b.step("tui", "Run the TUI").dependOn(&run_tui.step);
 
+    // The Windows front end's rules. win/src/model.zig imports core and std
+    // only. This test runs on the host that builds the exe.
+    const model_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("win/src/model.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "core", .module = core_mod }},
+    }) });
+    test_step.dependOn(&b.addRunArtifact(model_tests).step);
+
     // C ABI static library. It shares `target` with everything else above,
     // so -Dtarget applies to it too. Releases ship a single aarch64-macos
     // slice, and no lipo step runs. core.zig calls c.getenv and allocates
