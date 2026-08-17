@@ -11,16 +11,21 @@ Usage:
     tools/mkfixtures.py primary     --profile core/testdata/primary/profile
     tools/mkfixtures.py sync-shaped --profile core/testdata/sync-shaped/profile
     tools/mkfixtures.py migrate     --profile core/testdata/migrated/profile
+    tools/mkfixtures.py overflow
 
-Each subcommand launches Firefox, drives it, and quits it. Firefox must
-be fully closed before the caller reads key4.db or logins.json, so this
+Each of those subcommands launches Firefox, drives it, and quits it. Firefox
+must be fully closed before the caller reads key4.db or logins.json, so this
 script always waits for the child process to exit.
+
+The `overflow` subcommand runs no Firefox. It writes one database through
+Python's own sqlite3. See core/testdata/README.md.
 """
 
 import argparse
 import json
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
@@ -320,18 +325,78 @@ def cmd_migrate(args):
         pass
 
 
+# A 512-byte page puts the payload threshold at 477 bytes, so every `wide`
+# row below spills onto an overflow page. 400 of them give the table 6
+# interior pages. A key4.db has 32768-byte pages and rows of about 400 bytes,
+# and each of its tables fits on one leaf page.
+OVERFLOW_ROWS = 400
+
+
+def cmd_overflow(args):
+    """Writes one database whose rows spill onto overflow pages.
+
+    Python's sqlite3 writes the file, so the bytes still come from SQLite.
+    Each row's content derives from its row number. Two runs write the same
+    bytes.
+    """
+    if os.path.exists(args.out):
+        os.remove(args.out)
+
+    con = sqlite3.connect(args.out)
+    con.execute("PRAGMA page_size = 512")
+    con.execute("PRAGMA journal_mode = delete")
+    con.execute(
+        "CREATE TABLE wide (id INTEGER PRIMARY KEY, label TEXT, body BLOB, n INT, f REAL, spare)"
+    )
+    # metaData and nssPrivate declare their primary key with no type, so the
+    # column stores a value of its own. `wide.id` above declares INTEGER, so
+    # it aliases the rowid and the record stores a NULL.
+    con.execute("CREATE TABLE narrow (id PRIMARY KEY UNIQUE ON CONFLICT REPLACE, item1, item2)")
+
+    for i in range(OVERFLOW_ROWS):
+        # Three rows carry a body long enough to need a chain of overflow
+        # pages. The rest need one page each. The width cycles so that both
+        # branches of the local-size formula are reached.
+        size = 20000 if i % 137 == 0 else 500 + (i * 29) % 400
+        body = bytes((i + j) % 256 for j in range(size))
+        con.execute(
+            "INSERT INTO wide (id, label, body, n, f, spare) VALUES (?, ?, ?, ?, ?, ?)",
+            (i + 1, f"row-{i}", body, i * -7919, i / 8.0, None),
+        )
+
+    for i in range(3):
+        con.execute(
+            "INSERT INTO narrow VALUES (?, ?, ?)",
+            (f"key-{i}", bytes([i]) * (i * 400), None),
+        )
+
+    con.commit()
+    con.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--firefox", default=DEFAULT_FIREFOX, help="path to the firefox binary")
-    parser.add_argument("--profile", required=True, help="profile directory to create or reopen")
+    parser.add_argument("--profile", help="profile directory to create or reopen")
+    parser.add_argument("--out", default="core/testdata/overflow.db",
+                        help="output path for the overflow fixture")
     parser.add_argument("--port", type=int, default=MARIONETTE_PORT)
     sub = parser.add_subparsers(dest="fixture", required=True)
     sub.add_parser("fresh")
     sub.add_parser("primary")
     sub.add_parser("sync-shaped")
     sub.add_parser("migrate")
+    sub.add_parser("overflow")
 
     args = parser.parse_args()
+
+    if args.fixture == "overflow":
+        cmd_overflow(args)
+        print(f"wrote {args.out}")
+        return
+
+    if args.profile is None:
+        parser.error("--profile is required for a Firefox-driven fixture")
     if os.path.exists(os.path.join(args.profile, "key4.db")) and args.fixture != "migrate":
         sys.exit(f"refusing to overwrite an existing profile at {args.profile}")
 

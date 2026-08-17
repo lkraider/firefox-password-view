@@ -17,6 +17,17 @@ reading of the format would only show the reader agrees with itself.
 | `unmigrated` | none | 143.0.4 | a 24-byte 3DES key, no AES-256 key, and 3 `des_ede3_cbc` entries |
 | `migrated` | none | `unmigrated`'s profile, opened once by 152.0.6 | both key rows under one CKA_ID, and every entry re-encrypted to AES-256 |
 
+Firefox writes every fixture above. `tools/mkfixtures.py overflow` writes
+`overflow.db` through Python's own `sqlite3`. It is a bare SQLite database
+and it stands outside any profile directory. Its page size is 512 bytes. Its
+rows therefore spill onto overflow pages, and its table b-tree grows 6
+interior pages. Every `key4.db` here has a 32768-byte page and rows of about
+400 bytes, and each of its tables fits on one leaf page. Each row of
+`overflow.db` holds content derived from its row number, so two runs of the
+generator write the same bytes. `core/test/oracle.zig` reads the file through
+`core/src/sqlitedb.zig` and through the system sqlite3, then compares every
+column.
+
 Some fixtures carry hand-written parts. Every such edit stays outside the
 encrypted bytes, so the crypto in each fixture is still Firefox's own
 output.
@@ -44,6 +55,12 @@ Regenerate a fixture with, for example:
 ```
 python3 tools/mkfixtures.py --profile /tmp/scratch fresh
 cp /tmp/scratch/key4.db /tmp/scratch/logins.json core/testdata/fresh/
+```
+
+Regenerate `overflow.db` in place with:
+
+```
+python3 tools/mkfixtures.py overflow
 ```
 
 `core/src/tests.zig` asserts each fixture's password-check decrypts under its

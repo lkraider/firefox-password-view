@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     // b.standardTargetOptions resolves the target here, then the line
@@ -53,6 +54,41 @@ pub fn build(b: *std.Build) void {
     const tests = b.addTest(.{ .root_module = test_mod });
     const test_step = b.step("test", "Run the core and TUI tests");
     test_step.dependOn(&b.addRunArtifact(tests).step);
+
+    // The oracle reads every fixture through core/src/sqlitedb.zig and again
+    // through the system sqlite3, then compares the bytes. It links
+    // libsqlite3 from the macOS SDK. The test binary runs on the host, so it
+    // builds only when the target is the host and the host is macOS. The
+    // Windows CI job passes -Doracle=false.
+    const host_has_sqlite = builtin.os.tag == .macos and target.result.os.tag == builtin.os.tag;
+    if (b.option(bool, "oracle", "Diff the SQLite reader against the system sqlite3") orelse host_has_sqlite) {
+        const sqlite_c = b.addTranslateC(.{
+            .root_source_file = b.path("core/test/sqlite.h"),
+            .target = target,
+            .optimize = optimize,
+        });
+        sqlite_c.linkSystemLibrary("sqlite3", .{});
+
+        // A module rooted under core/test cannot import a file under
+        // core/src by path, so the reader arrives as a named import.
+        const oracle_mod = b.createModule(.{
+            .root_source_file = b.path("core/test/oracle.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "sqlite", .module = sqlite_c.createModule() },
+                .{ .name = "sqlitedb", .module = b.createModule(.{
+                    .root_source_file = b.path("core/src/sqlitedb.zig"),
+                    .target = target,
+                    .optimize = optimize,
+                }) },
+            },
+        });
+        oracle_mod.linkSystemLibrary("sqlite3", .{});
+        const oracle = b.addTest(.{ .root_module = oracle_mod });
+        test_step.dependOn(&b.addRunArtifact(oracle).step);
+    }
 
     // The TUI's argument parser. The tui module would pull vaxis and
     // sqlite3 into the link. Rooting this at args.zig keeps both out.
