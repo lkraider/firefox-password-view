@@ -132,6 +132,19 @@ struct AppModelTests {
         await model.forgetRevealed()
     }
 
+    /// An unmigrated profile holds des_ede3_cbc entries this project cannot
+    /// decrypt. The copy reports that and writes nothing.
+    @Test func copyingA3DESRowReportsTheErrorAndWritesNothing() async {
+        let clipboard = ClipboardSpy()
+        let model = AppModel(clipboard: clipboard.write)
+        await model.selectProfile(Profile(id: 0, path: fixture("unmigrated")))
+        #expect(model.entries.isEmpty == false, "the unmigrated fixture did not open")
+
+        await model.copy(at: 0)
+        #expect(clipboard.written.isEmpty)
+        #expect(model.statusMessage == FFPWError.legacy3DES.errorDescription)
+    }
+
     /// The app gives a revealed password 30 seconds. This model gets 50 ms.
     @Test func aRevealedPasswordMasksItselfAfterTheTimeout() async throws {
         let model = await openSyncShaped(revealTimeout: .milliseconds(50))
