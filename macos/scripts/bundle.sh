@@ -30,9 +30,12 @@ swift build -c "$config" -Xswiftc -gnone
 
 app=".build/$config/FirefoxPasswordView.app"
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp ".build/$config/FirefoxPasswordView" "$app/Contents/MacOS/FirefoxPasswordView"
 cp "Info.plist" "$app/Contents/Info.plist"
+# Info.plist's CFBundleIconFile names this file. scripts/make-icon.swift
+# draws it, and the committed .icns is what a build copies.
+cp "Icon.icns" "$app/Contents/Resources/Icon.icns"
 codesign --force --deep --sign - "$app"
 
 # A fixed mtime on every file. The app's contents are already

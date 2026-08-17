@@ -11,6 +11,9 @@ macos/.build/
 # scripts/package-release.sh's output directory.
 dist/
 
+# make-icon.swift writes this next to the .icns, to look at.
+macos/Icon.icns.preview.png
+
 .DS_Store
 
 # Anything extracted from a profile. Never commit key material.

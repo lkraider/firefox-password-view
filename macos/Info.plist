@@ -4,6 +4,8 @@
 <dict>
     <key>CFBundleExecutable</key>
     <string>FirefoxPasswordView</string>
+    <key>CFBundleIconFile</key>
+    <string>Icon</string>
     <key>CFBundleIdentifier</key>
     <string>br.com.nkey.FirefoxPasswordView</string>
     <key>CFBundlePackageType</key>
