@@ -1,0 +1,84 @@
+/* Resources for the Windows app. build.zig compiles this with Zig's
+   bundled resinator.
+
+   Zig ships no windows.h, so this file defines every constant it uses.
+   Measured: without the block below the compile fails with
+   "expected number or number expression; got 'DS_MODALFRAME'". */
+
+#include "src/resource.h"
+
+#define IDOK 1
+#define IDCANCEL 2
+
+#define RT_MANIFEST 24
+#define CREATEPROCESS_MANIFEST_RESOURCE_ID 1
+
+#define WS_CHILD 0x40000000L
+#define WS_VISIBLE 0x10000000L
+#define WS_POPUP 0x80000000L
+#define WS_CAPTION 0x00C00000L
+#define WS_SYSMENU 0x00080000L
+#define WS_TABSTOP 0x00010000L
+#define WS_GROUP 0x00020000L
+
+#define DS_MODALFRAME 0x80L
+#define DS_SETFONT 0x40L
+
+#define ES_AUTOHSCROLL 0x0080L
+#define ES_PASSWORD 0x0020L
+
+#define VK_RETURN 13
+#define VK_ESCAPE 27
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+
+IDI_APP ICON "icon.ico"
+
+IDR_MAINMENU MENU
+{
+    POPUP "&File"
+    {
+        MENUITEM "E&xit", IDM_FILE_EXIT
+    }
+    /* buildProfileMenu in win/src/main.zig inserts one radio item here per
+       profile in profiles.ini. */
+    POPUP "&Profile"
+    {
+        MENUITEM SEPARATOR
+    }
+    POPUP "&Help"
+    {
+        MENUITEM "&About", IDM_HELP_ABOUT
+    }
+}
+
+IDR_ROWMENU MENU
+{
+    POPUP "Row"
+    {
+        MENUITEM "&Reveal password\tEnter", IDM_ROW_REVEAL
+        MENUITEM "&Copy password\tCtrl+C", IDM_ROW_COPY
+    }
+}
+
+IDR_MAINACCEL ACCELERATORS
+{
+    "C", IDM_ROW_COPY, VIRTKEY, CONTROL, NOINVERT
+    "F", IDM_EDIT_FIND, VIRTKEY, CONTROL, NOINVERT
+    VK_RETURN, IDM_ROW_REVEAL, VIRTKEY, NOINVERT
+    VK_ESCAPE, IDM_EDIT_HIDE, VIRTKEY, NOINVERT
+}
+
+/* The template gives the tab order, the default button, Esc to cancel and
+   Segoe UI 9pt. No font code runs in win/src/main.zig for this dialog. */
+IDD_PASSWORD DIALOGEX 0, 0, 260, 96
+STYLE DS_MODALFRAME | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Primary Password"
+FONT 9, "Segoe UI", 400, 0, 1
+{
+    LTEXT "This profile is protected by a Primary Password.", IDC_PW_PROMPT, 10, 10, 240, 16
+    EDITTEXT IDC_PW_EDIT, 10, 30, 240, 14, ES_PASSWORD | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "", IDC_PW_ERROR, 10, 50, 240, 20
+    DEFPUSHBUTTON "OK", IDOK, 146, 74, 50, 14
+    PUSHBUTTON "Cancel", IDCANCEL, 200, 74, 50, 14
+}

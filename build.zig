@@ -142,6 +142,57 @@ pub fn build(b: *std.Build) void {
     }) });
     test_step.dependOn(&b.addRunArtifact(model_tests).step);
 
+    // win/app.rc and win/src/ids.zig repeat the same resource ids. The test
+    // in ids.zig reads win/src/resource.h and compares every value.
+    const ids_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("win/src/ids.zig"),
+        .target = target,
+        .optimize = optimize,
+    }) });
+    test_step.dependOn(&b.addRunArtifact(ids_tests).step);
+
+    // The Win32 front end. It imports `core` directly, the way tui does. No
+    // C ABI, no FFI, no libc.
+    const win_mod = b.createModule(.{
+        .root_source_file = b.path("win/src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = &.{
+            .{ .name = "core", .module = core_mod },
+            .{ .name = "args", .module = b.createModule(.{
+                .root_source_file = b.path("tui/src/args.zig"),
+                .target = target,
+                .optimize = optimize,
+            }) },
+        },
+    });
+    for ([_][]const u8{ "user32", "comctl32", "gdi32", "dwmapi", "uxtheme", "advapi32" }) |lib| {
+        win_mod.linkSystemLibrary(lib, .{});
+    }
+    // Zig bundles a .def file for each library above and generates the
+    // import library from it, so this links with no Windows SDK.
+    win_mod.addWin32ResourceFile(.{ .file = b.path("win/app.rc") });
+
+    const win_exe = b.addExecutable(.{
+        .name = "FirefoxPasswordView",
+        .root_module = win_mod,
+    });
+    // The windows subsystem keeps a console window from opening behind the
+    // app. Zig's WinStartup then calls `main` as declared in win/src/main.zig.
+    win_exe.subsystem = .Windows;
+
+    const win_step = b.step("win", "Build the Windows app");
+    if (target.result.os.tag == .windows) {
+        const install_win = b.addInstallArtifact(win_exe, .{});
+        b.getInstallStep().dependOn(&install_win.step);
+        win_step.dependOn(&install_win.step);
+    } else {
+        win_step.dependOn(&b.addFail(
+            "the win step needs a Windows target, for example -Dtarget=aarch64-windows-gnu",
+        ).step);
+    }
+
     // C ABI static library. It shares `target` with everything else above,
     // so -Dtarget applies to it too. Releases ship a single aarch64-macos
     // slice, and no lipo step runs. core.zig calls c.getenv and allocates
