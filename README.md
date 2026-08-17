@@ -12,7 +12,7 @@ macOS.
 
 ### SwiftUI
 
-![The macOS app listing the same five logins, with icons marking the Firefox Accounts row and the extension row](docs/images/macos-app.png)
+![The macOS app listing the same five logins, each with a copy button, and icons marking the Firefox Accounts row and the extension row](docs/images/macos-app.png)
 
 ## Installing
 
