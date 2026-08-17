@@ -6,6 +6,13 @@ A terminal UI and a macOS app read a local Firefox profile's saved logins
 and show them to the profile owner. Both are built on the same Zig core.
 The released binaries are Apple Silicon macOS.
 
+![The terminal UI listing five logins with masked passwords, one revealed, and the confirmation prompt on the Firefox Accounts row](docs/images/tui.png)
+
+![The macOS app listing the same five logins, with icons marking the Firefox Accounts row and the extension row](docs/images/macos-app.png)
+
+Both screens run against `core/testdata/sync-shaped`, a fixture committed
+to this repo. Every credential in it is synthetic.
+
 ## Scope
 
 This reads a profile. It never writes one. `key4.db` is opened
