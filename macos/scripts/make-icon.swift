@@ -1,6 +1,7 @@
-// Draws Icon.icns. Run it after changing the artwork:
+// Draws Icon.icns, and the PNG the README shows. Run it after changing the
+// artwork:
 //
-//     swift macos/scripts/make-icon.swift macos/Icon.icns
+//     swift macos/scripts/make-icon.swift macos/Icon.icns docs/images/icon.png
 //
 // The .icns is committed, so a build needs neither this script nor a
 // designer. Every shape is a CoreGraphics path. SF Symbols are excluded by
@@ -124,3 +125,11 @@ print("wrote \(output)")
 
 // A flat PNG next to the .icns, for a look without opening Preview.
 try renderPNG(size: 512).write(to: URL(fileURLWithPath: output + ".preview.png"))
+
+// The README shows this one inline with its h1. Markdown sets no width, so
+// the file ships at the size it displays.
+if CommandLine.arguments.count > 2 {
+    let readmeIcon = CommandLine.arguments[2]
+    try renderPNG(size: 96).write(to: URL(fileURLWithPath: readmeIcon))
+    print("wrote \(readmeIcon)")
+}

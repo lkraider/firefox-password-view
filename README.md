@@ -1,4 +1,4 @@
-# Firefox Password View
+# ![](docs/images/icon.png) Firefox Password View
 
 [![CI](https://github.com/lkraider/firefox-password-view/actions/workflows/ci.yml/badge.svg)](https://github.com/lkraider/firefox-password-view/actions/workflows/ci.yml)
 
