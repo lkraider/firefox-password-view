@@ -80,8 +80,8 @@ One entry has `hostname = chrome://FirefoxAccounts` and
 Account email, and its decrypted password is a JSON document holding sync
 key material. Revealing it hands over the whole Mozilla Account. The store
 labels this row `account_credential`. Entries can also carry a
-`moz-extension://` origin, labelled `extension`. A hostname here carries
-any scheme.
+`moz-extension://` origin, labelled `extension`. Hostname parsing must not
+assume `http` or `https`.
 
 ## The decryption chain
 
