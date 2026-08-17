@@ -31,19 +31,18 @@ struct ContentView: View {
     }
 }
 
-/// Owns the table's dependency set. Reading `matchedIndices` and
+/// Owns the table's dependency set. Reading `entries`, `matchedIndices` and
 /// `revealedIndex` here is what makes SwiftUI re-invoke
-/// EntryTableView.updateNSView when either changes; a read inside the
-/// representable's own callbacks is not tracked. Keep both reads. Without
-/// them the table reloads once against an empty AppModel on a cold open and
-/// never again, because matchedIndices is assigned after ffpw_entries
-/// returns and nothing invalidates this view.
+/// EntryTableView.updateNSView when any of them changes. A read inside the
+/// representable's own callbacks goes untracked. Keep all three reads.
+/// Dropping one leaves the table showing whatever it drew before that
+/// property was assigned, for the life of the window.
 ///
-/// These two are also the whole dependency set, so statusMessage changing,
-/// a copy, or a loading spinner still leaves the table alone.
+/// They are also the whole dependency set, so statusMessage changing, a
+/// copy, or a loading spinner still leaves the table alone.
 ///
-/// Internal rather than private so EntryListViewTests can evaluate this
-/// body inside withObservationTracking.
+/// EntryListViewTests evaluates this body inside withObservationTracking,
+/// which is why the type is internal.
 struct EntryListView: View {
     let model: AppModel
 

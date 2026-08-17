@@ -12,10 +12,6 @@ import Testing
 /// invalidation followed it.
 @MainActor
 struct EntryListViewTests {
-    private func fixture(_ name: String) -> String {
-        "../core/testdata/\(name)"
-    }
-
     /// withObservationTracking's onChange is @Sendable, so it cannot capture
     /// and mutate a local var under swift-tools-version 6.0.
     private final class Flag: @unchecked Sendable {
@@ -23,15 +19,14 @@ struct EntryListViewTests {
     }
 
     @Test func entryListViewBodyTracksMatchedIndices() async {
-        let model = AppModel()
-        await model.selectProfile(Profile(id: 0, path: fixture("sync-shaped")))
+        let model = await openSyncShaped()
         #expect(model.matchedIndices.count == 5)
 
         // Registering after the profile is open leaves matchedIndices as the
-        // only tracked property this test then changes. Registering before
-        // would also catch a body that reads statusMessage or entries, which
-        // selectProfile writes too, and the test would pass without the
-        // dependency it exists to prove.
+        // only tracked property this test then changes. selectProfile also
+        // writes statusMessage and entries, so registering before it would
+        // pass on a body that read either of those and never touched
+        // matchedIndices.
         let flag = Flag()
         withObservationTracking {
             _ = EntryListView(model: model).body
@@ -51,14 +46,8 @@ struct EntryListViewTests {
     /// `numberOfRows` answers from the coordinator's own snapshot, so these
     /// counts also assert that each reload updated it.
     @Test func reloadFillsTheTableWhenIndicesArriveAfterAnEmptyUpdate() async {
-        let model = AppModel()
-        await model.selectProfile(Profile(id: 0, path: fixture("sync-shaped")))
-
-        let coordinator = EntryTableView.Coordinator(model: model)
-        let table = NSTableView()
-        table.addTableColumn(NSTableColumn(identifier: .init("main")))
-        table.dataSource = coordinator
-        table.delegate = coordinator
+        let model = await openSyncShaped()
+        let (coordinator, table) = makeTable(for: model)
 
         // The cold open: the first update runs before the entries land.
         coordinator.reload(table, entries: [], matchedIndices: [], revealedIndex: nil)
@@ -79,14 +68,8 @@ struct EntryListViewTests {
     /// full height, so the list looks empty while the status bar counts the
     /// logins. The entries assignment that follows has to reload the table.
     @Test func entriesArrivingAfterTheIndicesReloadsTheRows() async {
-        let model = AppModel()
-        await model.selectProfile(Profile(id: 0, path: fixture("sync-shaped")))
-
-        let coordinator = EntryTableView.Coordinator(model: model)
-        let table = NSTableView()
-        table.addTableColumn(NSTableColumn(identifier: .init("main")))
-        table.dataSource = coordinator
-        table.delegate = coordinator
+        let model = await openSyncShaped()
+        let (coordinator, table) = makeTable(for: model)
 
         // Indices first, entries still empty.
         coordinator.reload(table, entries: [], matchedIndices: model.matchedIndices, revealedIndex: nil)

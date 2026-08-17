@@ -139,6 +139,11 @@ struct EntryTableView: NSViewRepresentable {
                 hostingView.identifier = identifier
             }
 
+            // A local, so the two closures below capture it and leave self
+            // uncaptured. The Coordinator outlives them either way, and the
+            // table holds it.
+            let model = self.model
+
             // Indexed against the same snapshot numberOfRows answered from,
             // so `row` is always in range for it.
             guard row < lastMatchedIndices.count else { return hostingView }
@@ -149,7 +154,6 @@ struct EntryTableView: NSViewRepresentable {
             // lastRevealedIndex instead pairs one row's flag with another
             // row's secret whenever a reveal lands before its reload does.
             let isRevealed = model.revealedIndex == index
-            let model = self.model
             hostingView.rootView = EntryRowContent(
                 entry: entry,
                 isRevealed: isRevealed,
@@ -188,40 +192,18 @@ struct EntryRowContent: View {
     var body: some View {
         Group {
             if let entry {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            if entry.isAccountCredential {
-                                Label("Account", systemImage: "person.crop.circle.badge.exclamationmark")
-                                    .labelStyle(.iconOnly)
-                                    .foregroundStyle(.orange)
-                                    .help("Firefox Sync account credential")
-                            }
-                            if entry.isExtension {
-                                Label("Extension", systemImage: "puzzlepiece.extension")
-                                    .labelStyle(.iconOnly)
-                                    .foregroundStyle(.secondary)
-                                    .help("Browser extension")
-                            }
-                            Text(entry.hostname)
-                                .font(.headline)
-                                .lineLimit(1)
-                        }
-                        Text(entry.username)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Group {
-                            if isRevealed {
-                                Text(revealedValue ?? "").textSelection(.enabled)
-                            } else {
-                                Text("••••••••")
-                            }
-                        }
-                        .font(.system(.body, design: .monospaced))
-                        .lineLimit(1)
-                    }
-                    Spacer()
+                // Two sibling buttons, so both reach the accessibility tree.
+                // A Button carries an accessibility action where the tap
+                // gesture this replaced carried none, and a physical mouse
+                // click was the only way to reveal a password. Nesting the
+                // copy button inside the row button dropped it from the tree
+                // altogether, since a Button publishes its content as one
+                // element.
+                HStack(spacing: 0) {
+                    Button(action: onToggleReveal) { fields(entry) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(label(for: entry))
+                        .accessibilityHint(isRevealed ? "Hides the password" : "Reveals the password")
                     if isRevealed {
                         Button(action: onCopy) {
                             Image(systemName: "doc.on.doc")
@@ -229,34 +211,51 @@ struct EntryRowContent: View {
                         .buttonStyle(.borderless)
                         .help("Copy password")
                         .accessibilityLabel("Copy password")
+                        .padding(.trailing, 8)
                     }
                 }
-                .padding(.horizontal, 8)
-                .contentShape(Rectangle())
-                // A Button carries an accessibility action. The tap gesture
-                // this replaced carried none, so a physical mouse click was
-                // the only way to reveal a password. .plain draws the row
-                // exactly as before.
-                .modifier(RowActivation(onToggleReveal: onToggleReveal))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(label(for: entry))
-                .accessibilityHint(isRevealed ? "Hides the password" : "Reveals the password")
-                .accessibilityAddTraits(.isButton)
-            } else {
-                EmptyView()
             }
         }
         .frame(height: Self.height)
     }
-}
 
-/// Wraps the row in a plain Button. Split out so the row body keeps one
-/// level of nesting and the button styling stays in one place.
-private struct RowActivation: ViewModifier {
-    let onToggleReveal: () -> Void
-
-    func body(content: Content) -> some View {
-        Button(action: onToggleReveal) { content }
-            .buttonStyle(.plain)
+    private func fields(_ entry: Entry) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if entry.isAccountCredential {
+                        Label("Account", systemImage: "person.crop.circle.badge.exclamationmark")
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.orange)
+                            .help("Firefox Sync account credential")
+                    }
+                    if entry.isExtension {
+                        Label("Extension", systemImage: "puzzlepiece.extension")
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.secondary)
+                            .help("Browser extension")
+                    }
+                    Text(entry.hostname)
+                        .font(.headline)
+                        .lineLimit(1)
+                }
+                Text(entry.username)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Group {
+                    if isRevealed {
+                        Text(revealedValue ?? "").textSelection(.enabled)
+                    } else {
+                        Text("••••••••")
+                    }
+                }
+                .font(.system(.body, design: .monospaced))
+                .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .contentShape(Rectangle())
     }
 }

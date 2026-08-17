@@ -15,8 +15,9 @@ struct FirefoxPasswordViewApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
-    /// `Window` rather than `WindowGroup`: this scene is unique, so macOS
-    /// offers no File > New Window and restores no duplicate of it.
+    /// `Window` makes this scene unique, so macOS offers no File > New
+    /// Window for it and restores no duplicate. `WindowGroup` opened two at
+    /// launch.
     ///
     /// One AppModel backs the app, since @State here is created once per
     /// process. Every extra window would therefore show the same profile and

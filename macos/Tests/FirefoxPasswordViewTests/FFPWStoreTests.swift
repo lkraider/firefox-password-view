@@ -5,10 +5,6 @@ import Testing
 /// tests use. The crypto itself is proven at the Zig level; this only
 /// checks that FFPWStore marshals the C ABI correctly.
 struct FFPWStoreTests {
-    private func fixture(_ name: String) -> String {
-        "../core/testdata/\(name)"
-    }
-
     @Test func freshFixtureOpensAndDecrypts() async {
         let store = FFPWStore()
         let (needsPassword, error) = await store.open(profilePath: fixture("fresh"))

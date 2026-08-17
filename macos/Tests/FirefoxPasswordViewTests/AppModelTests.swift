@@ -3,16 +3,6 @@ import Testing
 
 @MainActor
 struct AppModelTests {
-    private func fixture(_ name: String) -> String {
-        "../core/testdata/\(name)"
-    }
-
-    private func openSyncShaped() async -> AppModel {
-        let model = AppModel()
-        await model.selectProfile(Profile(id: 0, path: fixture("sync-shaped")))
-        return model
-    }
-
     /// The chrome://FirefoxAccounts password is Mozilla Account sync key
     /// material, so one activation must not show it.
     @Test func theAccountRowNeedsASecondActivation() async {
