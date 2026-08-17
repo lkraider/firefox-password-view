@@ -14,6 +14,10 @@ The released binaries are Apple Silicon macOS.
 
 ![The macOS app listing the same five logins, with icons marking the Firefox Accounts row and the extension row](docs/images/macos-app.png)
 
+`scripts/screenshots.sh` regenerates both images after a UI change. It
+builds each front end, points it at a fixture profile, and captures the
+window.
+
 ## Scope
 
 This reads a profile. It never writes one. `key4.db` is opened
