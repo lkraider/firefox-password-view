@@ -11,19 +11,18 @@ import SwiftUI
 struct EntryTableView: NSViewRepresentable {
     let model: AppModel
 
-    /// Passed in as values by EntryListView, whose body reads them. That
-    /// read is what registers the Observation dependency SwiftUI uses to
-    /// re-invoke `updateNSView`. Reading them here through `model` instead
-    /// registers nothing. SwiftUI tracks the reads made while it evaluates a
-    /// body. A read inside a representable's callback goes untracked.
+    /// EntryListView's body reads these three and passes them in as values.
+    /// SwiftUI tracks the reads a body makes, and that tracking is what
+    /// re-invokes `updateNSView`. A read through `model` inside this
+    /// representable's callbacks happens outside a body evaluation, and
+    /// SwiftUI records it nowhere.
     ///
-    /// A row's content needs all three. `entries` belongs here even though
-    /// only `viewFor` reads it: AppModel publishes `entries` and
-    /// `matchedIndices` separately, and ContentView's
-    /// `.task(id: searchText)` can land `matchedIndices` first, while
-    /// `entries` is still empty. Every row then builds with `entry: nil` and
-    /// draws EmptyView at full row height. Without `entries` tracked, the
-    /// assignment that follows reloads nothing and the rows stay blank.
+    /// `entries` is here although only `viewFor` reads it. AppModel
+    /// publishes `entries` and `matchedIndices` separately, and ContentView's
+    /// `.task(id: searchText)` can land `matchedIndices` while `entries` is
+    /// still empty. Every row then builds with `entry: nil` and draws
+    /// EmptyView at full row height. Tracking `entries` is what reloads
+    /// those rows when the assignment lands.
     let entries: [Entry]
     let matchedIndices: [UInt32]
     let revealedIndex: UInt32?
@@ -80,14 +79,14 @@ struct EntryTableView: NSViewRepresentable {
             self.model = model
         }
 
-        /// Reloads everything when the match set or the entries changed;
-        /// reveals toggling reloads just the one or two affected rows.
+        /// A changed match set or entry count reloads every row. A toggled
+        /// reveal reloads the one or two rows it touched.
         ///
-        /// `entries` is compared by count. AppModel only ever assigns it
-        /// wholesale. The one path that swaps entries for a same-sized set,
-        /// selectProfile, clears matchedIndices on its way, and the first
-        /// comparison catches that. An element-wise compare would run over
-        /// every entry on each keystroke to learn nothing.
+        /// `entries` is compared by count, since AppModel assigns it
+        /// wholesale. selectProfile swaps entries for a same-sized set, and
+        /// it clears matchedIndices on the way, so the first comparison
+        /// catches that. An element-wise compare would walk every entry on
+        /// each keystroke and report the same answer.
         func reload(_ tableView: NSTableView, entries: [Entry], matchedIndices indices: [UInt32], revealedIndex revealed: UInt32?) {
             if indices != lastMatchedIndices || entries.count != lastEntries.count {
                 lastEntries = entries
@@ -167,7 +166,8 @@ struct EntryTableView: NSViewRepresentable {
 }
 
 /// One row's visual content, hosted inside the NSTableView cell above via
-/// NSHostingView. Pure and stateless: every value it needs is passed in.
+/// NSHostingView. It holds no state. Every value it draws is passed in, so
+/// `viewFor` can reuse one hosting view for any row.
 struct EntryRowContent: View {
     static let height: CGFloat = 56
 
@@ -177,8 +177,9 @@ struct EntryRowContent: View {
     let onToggleReveal: () -> Void
     let onCopy: () -> Void
 
-    /// What VoiceOver reads for the row. The password stays out of it while
-    /// the row is masked, so moving through the list speaks no secrets.
+    /// What VoiceOver reads for the row. It carries the hostname, the
+    /// username and the state of the password. The password value stays out
+    /// of it, so arrowing down the list speaks no passwords.
     private func label(for entry: Entry) -> String {
         var parts: [String] = []
         if entry.isAccountCredential { parts.append("Firefox Sync account credential") }
@@ -192,13 +193,12 @@ struct EntryRowContent: View {
     var body: some View {
         Group {
             if let entry {
-                // Two sibling buttons, so both reach the accessibility tree.
-                // A Button carries an accessibility action where the tap
-                // gesture this replaced carried none, and a physical mouse
-                // click was the only way to reveal a password. Nesting the
-                // copy button inside the row button dropped it from the tree
-                // altogether, since a Button publishes its content as one
-                // element.
+                // A Button publishes its content as one accessibility
+                // element, so nesting the copy button inside the row button
+                // dropped copy from the tree. As siblings both appear.
+                // A Button also carries an accessibility action. The tap
+                // gesture used here before carried none, and a mouse click
+                // was the only way to reveal a password.
                 HStack(spacing: 0) {
                     Button(action: onToggleReveal) { fields(entry) }
                         .buttonStyle(.plain)

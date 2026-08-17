@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// This binary has no `.app` bundle, so LaunchServices never activates it:
-/// without this, the window opens but Terminal keeps keyboard focus.
+/// A binary run outside an `.app` bundle is never activated by
+/// LaunchServices. Its window opens, and Terminal keeps keyboard focus.
+/// These two calls take the focus.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)

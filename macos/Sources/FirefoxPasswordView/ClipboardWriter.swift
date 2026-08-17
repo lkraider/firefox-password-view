@@ -1,10 +1,10 @@
 import AppKit
 
 /// Copies a password so clipboard managers leave it out of their history.
-/// nspasteboard.org defines `org.nspasteboard.ConcealedType` as the marker
-/// for exactly this, and 1Password and Bitwarden set it the same way.
-/// `TransientType` stays unset. nspasteboard.org calls over-marking a
-/// mistake, and the extra marker grants nothing.
+/// nspasteboard.org defines `org.nspasteboard.ConcealedType` for this, and
+/// 1Password and Bitwarden set the same marker. `TransientType` stays
+/// unset. nspasteboard.org documents it for content a manager should ignore
+/// completely, and a password the user asked to copy is not that.
 @MainActor
 enum ClipboardWriter {
     private static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
@@ -19,8 +19,8 @@ enum ClipboardWriter {
         let changeCount = pasteboard.changeCount
         pendingClear?.cancel()
         let clear = DispatchWorkItem {
-            // Only clear if nothing else has been copied since. This wipes
-            // the password it wrote. A later unrelated copy stays.
+            // An unchanged changeCount means the password is still on the
+            // pasteboard. Any later copy bumps it, and that value stays.
             if NSPasteboard.general.changeCount == changeCount {
                 NSPasteboard.general.clearContents()
             }

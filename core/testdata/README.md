@@ -11,7 +11,7 @@ reading of the format would only show the reader agrees with itself.
 | Fixture | Documented password | Firefox version | Covers |
 |---|---|---|---|
 | `fresh` | none (empty Primary Password) | 152.0.6 | one AES-256 key row, 3 logins |
-| `primary` | `fixture-primary-password-1` | 152.0.6 | a real Primary Password: a 48-byte SHA384 global salt, rejection of the empty and the wrong password |
+| `primary` | `fixture-primary-password-1` | 152.0.6 | a Primary Password set by the user: a 48-byte SHA384 global salt, rejection of the empty and the wrong password |
 | `two-profiles` | none | 152.0.6 | `profiles.ini` install-section precedence over the legacy `Default=1` flag |
 | `sync-shaped` | none (empty Primary Password) | 152.0.6 | a `chrome://FirefoxAccounts` row, a `moz-extension://` row, and 2 sync deletion tombstones |
 | `unmigrated` | none | 143.0.4 | a 24-byte 3DES key, no AES-256 key, and 3 `des_ede3_cbc` entries |
@@ -47,6 +47,6 @@ cp /tmp/scratch/key4.db /tmp/scratch/logins.json core/testdata/fresh/
 ```
 
 `core/src/tests.zig` asserts each fixture's password-check decrypts under its
-documented password. A real profile dropped in here by mistake fails that
-assertion loudly. That failure stops a real credential from leaking
-silently into a test run.
+documented password. A profile from this machine dropped in here fails that
+assertion, since the documented password does not unlock it. The failure
+stops that profile's credentials from reaching a test run.

@@ -6,10 +6,10 @@ import Testing
 /// SwiftUI re-invokes EntryTableView.updateNSView only when a property the
 /// enclosing body read has changed. Holding an @Observable reference
 /// registers nothing. Reading `matchedIndices` solely inside
-/// Coordinator.reload put the read where SwiftUI does not track it, so on a
-/// cold open the table reloaded once against an empty AppModel and never
-/// again: matchedIndices is assigned after ffpw_entries returns, and no
-/// invalidation followed it.
+/// Coordinator.reload put that read outside any body evaluation. On a cold
+/// open the table then reloaded once, against an empty AppModel. The
+/// matchedIndices assignment that follows ffpw_entries invalidated nothing,
+/// so no second reload ran.
 @MainActor
 struct EntryListViewTests {
     /// withObservationTracking's onChange is @Sendable, so it cannot capture

@@ -54,7 +54,7 @@ First release. Binaries for Apple Silicon macOS.
   covering a fresh profile, a Primary Password, the pre- and
   post-Firefox-144 3DES-to-AES-256 migration, two profiles under one
   `profiles.ini`, and a synced profile's tombstones and non-web schemes.
-- A fuzz corpus for the DER reader, mutating real SDR blobs through
+- A fuzz corpus for the DER reader, mutating captured SDR blobs through
   `sdr.parse` and `pbes2.parse`.
 - `docs/DESIGN.md`: the on-disk format and the reasoning behind each
   implementation decision.

@@ -3,8 +3,8 @@
 #
 # Both front ends run against a sandbox HOME built from
 # core/testdata/sync-shaped, so the images can only ever show that
-# fixture's synthetic credentials. Pointing either front end at a real
-# profile would put real hostnames and usernames in a committed PNG.
+# fixture's synthetic credentials. Pointing either front end at a profile
+# on this machine would put its hostnames and usernames in a committed PNG.
 #
 # Every capture targets a CoreGraphics window id. screencapture -R takes
 # whatever occupies a screen rectangle, so a window that moves or falls

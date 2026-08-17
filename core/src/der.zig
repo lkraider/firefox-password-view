@@ -76,7 +76,6 @@ pub const Reader = struct {
         return (try r.expect(tag_oid)).contents;
     }
 
-    /// Descends into a SEQUENCE and returns a reader over its contents.
     pub fn seq(r: *Reader) Error!Reader {
         return init((try r.expect(tag_sequence)).contents);
     }

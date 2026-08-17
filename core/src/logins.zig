@@ -4,35 +4,36 @@ const std = @import("std");
 const sdr = @import("sdr.zig");
 const keydb = @import("keydb.zig");
 
-/// Distinguishes rows a viewer must treat differently from an ordinary saved
-/// login. `account_credential`'s password is Mozilla Account sync key
-/// material. Revealing it surrenders the whole account.
+/// `account_credential`'s password is Mozilla Account sync key material.
+/// Whoever reads it holds the account. `extension` marks a row an add-on
+/// saved for itself.
 pub const Kind = enum { normal, account_credential, extension };
 
 pub const Entry = struct {
     hostname: []const u8,
     /// Decrypted at load, since the list shows it. Empty when `legacy_3des`
-    /// is true: the username is undecryptable without a 3DES implementation,
-    /// which this project does not carry (see docs/DESIGN.md, "Decisions").
+    /// is true. Decrypting it there needs a 3DES implementation, and this
+    /// project carries none (see docs/DESIGN.md, "Decisions").
     username: []const u8,
     kind: Kind,
-    /// True when this entry's fields are still des_ede3_cbc, meaning
-    /// Firefox 144 has never re-encrypted this profile's store. Neither the
-    /// username above nor `reveal`'s password will decrypt.
+    /// True when this entry's fields are still des_ede3_cbc. Firefox 144
+    /// re-encrypts a store to AES-256 on its first open, so a true here
+    /// means that open never happened. The username above and `reveal`'s
+    /// password both fail to decrypt.
     legacy_3des: bool,
-    /// The base64 SDR blob, kept as-is. Decrypted only when the caller
-    /// reveals this entry, so a password never exists in memory before then.
+    /// The base64 SDR blob, kept as-is. `revealPassword` decrypts it on
+    /// demand, so the password stays out of memory until someone asks.
     encrypted_password: []const u8,
     time_password_changed: i64,
 };
 
 pub const ScanResult = struct {
     entries: []Entry,
-    /// Sync deletion tombstones (`deleted: true`, no hostname, no encrypted
-    /// fields). Skipped, and left out of the entry count.
+    /// Sync deletion tombstones: `deleted: true`, no hostname, no encrypted
+    /// fields. They stay out of `entries` and out of the entry count.
     tombstones_skipped: usize = 0,
-    /// A row that is not a tombstone but is missing hostname or the
-    /// encrypted fields anyway. Not expected on a real profile.
+    /// A row missing its hostname or its encrypted fields, carrying no
+    /// `deleted` flag. A Firefox-written profile holds none of these.
     malformed: usize = 0,
 };
 

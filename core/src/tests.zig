@@ -113,10 +113,10 @@ fn freeScanResult(gpa: std.mem.Allocator, result: anytype) void {
 }
 
 test "logins.scan marks a 3des-only entry legacy_3des" {
-    // A profile Firefox 144 has never opened carries no AES-256 key at all
-    // (regression: decryptField used to ask for keys.aes256 before parsing
-    // the blob, so every entry surfaced as the generic NoSdrKey. The blob
-    // names its own cipher, so the correct report is LegacyTripleDes).
+    // A profile Firefox 144 has never opened carries no AES-256 key.
+    // decryptField used to read keys.aes256 before parsing the blob, and
+    // every entry then reported NoSdrKey. The blob names its own cipher, so
+    // LegacyTripleDes is the answer that says what to do about it.
     const keydb = @import("keydb.zig");
     const logins = @import("logins.zig");
     const json =
@@ -137,7 +137,7 @@ test "logins.scan marks a 3des-only entry legacy_3des" {
 }
 
 test "pbes2 seeds with SHA384 when the global salt is 48 bytes" {
-    // Captured from a real Firefox 152 profile after setting a synthetic
+    // Captured from a Firefox 152 profile after setting a synthetic
     // Primary Password ("fixture-primary-password-1"). A never-initialized
     // token carries a 20-byte SHA1-length global salt. Setting a Primary
     // Password for the first time replaces it with this 48-byte SHA384-length
@@ -168,10 +168,10 @@ test "pbes2 rejects a scheme it does not implement" {
     try testing.expectError(error.UnsupportedScheme, pbes2.parse(&buf));
 }
 
-// Fixtures are written by real Firefox over Marionette, never by this
-// project's own reading of the format. See tools/mkfixtures.py. A real
-// profile dropped into core/testdata by mistake fails these loudly: it
-// was never unlocked with these documented passwords.
+// The installed Firefox writes these fixtures over Marionette, so they
+// carry the format Firefox produces. See tools/mkfixtures.py. A profile
+// from this machine dropped into core/testdata fails these tests, since
+// the documented passwords do not unlock it.
 
 fn readFixtureLogins(gpa: std.mem.Allocator, path: []const u8) ![]u8 {
     var threaded: std.Io.Threaded = .init(gpa, .{});
@@ -237,7 +237,7 @@ test "two-profiles resolves to the profile the install section names" {
     _ = try keydb.load(key4, "");
 }
 
-test "the unmigrated fixture carries a real 24-byte 3DES key and no AES-256 key" {
+test "the unmigrated fixture carries a 24-byte 3DES key and no AES-256 key" {
     // Written by Firefox 143.0.4, before Firefox 144 added the AES-256 key
     // and re-encrypted the store. Every entry here is des_ede3_cbc.
     const keydb = @import("keydb.zig");
@@ -420,11 +420,11 @@ test "profiles.enumerate on two-profiles finds the one with no key4.db" {
     try testing.expectEqual(@as(usize, 1), with_key4);
 }
 
-// `zig build test --fuzz` mutates these real DER blobs (an AES-256 SDR
-// blob, a des_ede3_cbc one, and one decoded straight out of the fresh
-// fixture's encryptedUsername) and feeds every mutation to der.Reader's two
-// real call paths. Nothing here should ever panic. A parse error is a
-// correct answer for bytes that were never valid to begin with.
+// `zig build test --fuzz` mutates the DER blobs in the corpus below (an
+// AES-256 SDR blob, a des_ede3_cbc one, and one decoded out of the fresh
+// fixture's encryptedUsername) and feeds every mutation to der.Reader
+// through sdr.parse and pbes2.parse. A panic is what this looks for. A
+// parse error is the correct answer for mutated bytes.
 //
 // `--fuzz` itself does not run on the pinned Zig 0.16.0: test_runner.zig
 // calls std.debug.writeStackTrace with a *builtin.StackTrace where it now
@@ -433,7 +433,7 @@ test "profiles.enumerate on two-profiles finds the one with no key4.db" {
 // std.testing.fuzz on 0.16", Ziggit thread 15515). Plain `zig build test`
 // still compiles and runs this test once, over the corpus above, with no
 // mutation. Rerun with --fuzz once a Zig version fixes that runner.
-test "fuzz sdr.parse and pbes2.parse over mutated real blobs" {
+test "fuzz sdr.parse and pbes2.parse over mutated captured blobs" {
     try testing.fuzz({}, fuzzParsers, .{
         .corpus = &.{
             &hex("30430410f8000000000000000000000000000001" ++

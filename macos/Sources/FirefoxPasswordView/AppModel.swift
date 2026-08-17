@@ -9,15 +9,14 @@ final class AppModel {
 
     private var store = FFPWStore()
     private(set) var matchedIndices: [UInt32] = []
-    /// Every entry's display data, fetched once when the profile opens.
-    /// Hostnames and usernames are already decrypted by then, so indexing
-    /// into this array is the whole cost of showing a row: no per-row fetch,
-    /// no per-row loading state.
+    /// Fetched once when the profile opens. The core decrypts every hostname
+    /// and username during that open, so drawing a row is one index into
+    /// this array.
     private(set) var entries: [Entry] = []
 
-    /// ContentView drives runSearch from a `.task(id: searchText)`. That
-    /// cancels the in-flight search and starts a new one on every change
-    /// here, so nothing in this file tracks or cancels a Task by hand.
+    /// ContentView drives runSearch from a `.task(id: searchText)`. SwiftUI
+    /// cancels the running search and starts a new one on every change here.
+    /// This file holds no Task of its own.
     var searchText: String = ""
 
     private(set) var needsPassword = false
@@ -31,10 +30,10 @@ final class AppModel {
     private(set) var statusMessage = ""
     private(set) var isLoading = false
 
-    /// Tries every enumerated profile in turn and stops at the first one
-    /// carrying a key4.db, meaning it opens or asks for a password. That is
-    /// the distinction ffpw_open reports. This skips a profile Firefox has
-    /// abandoned, such as the one the legacy Default=1 flag can point at.
+    /// profiles.ini lists profiles Firefox abandoned, including the one the
+    /// legacy Default=1 flag points at. Those have no key4.db, and ffpw_open
+    /// fails on them. A profile that has one either opens or reports
+    /// FFPW_ERR_NEEDS_PASSWORD, and `attemptOpen` returns nil for both.
     func start() async {
         profiles = listProfiles()
         for profile in profiles {
@@ -63,9 +62,8 @@ final class AppModel {
         }
     }
 
-    /// Opens `profile`, updates `needsPassword`, and loads its entries if it
-    /// needs no password. Returns the error on failure, so `start()` can try
-    /// the next profile silently while `selectProfile()` shows it directly.
+    /// Hands the error back to the caller. `start()` moves on to the next
+    /// profile. `selectProfile()` puts the message in the status bar.
     private func attemptOpen(_ profile: Profile) async -> FFPWError? {
         let (needsPw, error) = await store.open(profilePath: profile.path)
         needsPassword = needsPw
@@ -96,21 +94,17 @@ final class AppModel {
         await runSearch()
     }
 
-    /// Called by `loadEntries` directly and by ContentView's
-    /// `.task(id: searchText)` on every keystroke. A search superseded by a
-    /// newer keystroke must not overwrite the newer one's results if it
-    /// happens to finish later, so this is followed by a check.
+    /// ContentView cancels this task on every keystroke. The cancelled call
+    /// still returns its indices, and they belong to the older query.
     func runSearch() async {
         let indices = await store.search(searchText)
         guard !Task.isCancelled else { return }
         matchedIndices = indices
     }
 
-    /// The entry a second activation reveals. The
-    /// `chrome://FirefoxAccounts` password is Mozilla Account sync key
-    /// material, so revealing it hands over the account. The TUI asks for a
-    /// second `enter` on that row. This does the same for a click, a
-    /// keypress and an accessibility action.
+    /// The `chrome://FirefoxAccounts` password is Mozilla Account sync key
+    /// material. Whoever reads it holds the account. Both front ends ask for
+    /// a second activation on that row.
     private(set) var pendingAccountReveal: UInt32?
 
     func toggleReveal(_ index: UInt32) async {
@@ -131,8 +125,7 @@ final class AppModel {
         case .success(let secret):
             revealedIndex = index
             revealedSecret = secret
-            // Clears the confirmation prompt once the row is showing, so
-            // the status bar stops asking for something already done.
+            // Drops the confirmation prompt this reveal answered.
             statusMessage = entryCountMessage
         case .failure(let error):
             statusMessage = error.localizedDescription

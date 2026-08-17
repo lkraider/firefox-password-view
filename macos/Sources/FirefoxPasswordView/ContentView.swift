@@ -15,14 +15,12 @@ struct ContentView: View {
                 }
                 .overlay { LoadingIndicator(model: model) }
                 .safeAreaInset(edge: .bottom) { StatusBar(model: model) }
-                // Cancels the in-flight search and starts a new one whenever
-                // searchText changes, replacing a hand-rolled Task/cancel
-                // pair with the same behavior SwiftUI already provides.
-                // ContentView already reads searchText via .searchable's
-                // binding above, so this adds no new tracked dependency;
-                // attaching it to EntryListView instead would make that view
-                // (and its NSTableView) re-render on every keystroke, which
-                // the matchedIndices-only split above exists to avoid.
+                // SwiftUI cancels the running task and starts a new one
+                // whenever searchText changes. It sits on ContentView, which
+                // already reads searchText through .searchable above. On
+                // EntryListView it would add searchText to that view's
+                // dependencies, and the NSTableView would re-render on every
+                // keystroke.
                 .task(id: model.searchText) { await model.runSearch() }
         }
         .sheet(isPresented: Binding(get: { model.needsPassword }, set: { _ in })) {
@@ -31,18 +29,18 @@ struct ContentView: View {
     }
 }
 
-/// Owns the table's dependency set. Reading `entries`, `matchedIndices` and
-/// `revealedIndex` here is what makes SwiftUI re-invoke
-/// EntryTableView.updateNSView when any of them changes. A read inside the
-/// representable's own callbacks goes untracked. Keep all three reads.
-/// Dropping one leaves the table showing whatever it drew before that
-/// property was assigned, for the life of the window.
+/// Owns the table's dependency set. SwiftUI tracks the properties a body
+/// reads, so reading `entries`, `matchedIndices` and `revealedIndex` here
+/// re-invokes EntryTableView.updateNSView when one of them changes. A read
+/// inside the representable's own callbacks goes untracked. Drop one read
+/// and the table keeps drawing what it drew before that property was
+/// assigned, for the life of the window.
 ///
-/// They are also the whole dependency set, so statusMessage changing, a
-/// copy, or a loading spinner still leaves the table alone.
+/// The body reads nothing else, so a statusMessage write, a copy or a
+/// loading spinner leaves the table alone.
 ///
-/// EntryListViewTests evaluates this body inside withObservationTracking,
-/// which is why the type is internal.
+/// The type is internal so EntryListViewTests can evaluate this body inside
+/// withObservationTracking.
 struct EntryListView: View {
     let model: AppModel
 
@@ -61,10 +59,9 @@ private struct ProfilePicker: View {
     let model: AppModel
 
     var body: some View {
-        // Gated on selectedProfile so the Picker's binding never starts out
-        // nil: profiles.count > 1 is already true before start() picks one,
-        // and nil has no tag among the options below. AppKit logs that as
-        // an invalid Picker configuration.
+        // profiles.count > 1 turns true before start() picks a profile. The
+        // binding would read nil then, and nil has no tag among the options
+        // below. AppKit logs that as an invalid Picker configuration.
         if model.profiles.count > 1, model.selectedProfile != nil {
             Picker("Profile", selection: Binding(
                 get: { model.selectedProfile?.id },

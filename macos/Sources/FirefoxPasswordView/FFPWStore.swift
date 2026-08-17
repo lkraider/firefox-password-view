@@ -43,16 +43,17 @@ extension FFPWError: LocalizedError {
     }
 }
 
-/// Wraps one ffpw_store. Every method here is actor-isolated, so Swift
-/// itself serializes every call onto the store, matching the header's rule:
-/// one ffpw_store belongs to one thread at a time. Loading and decrypting
-/// happen here, off whichever thread the caller (the main actor) runs on.
+/// Wraps one ffpw_store. ffpw.h gives one store to one thread at a time.
+/// Every method here is actor-isolated, so Swift serializes the calls onto
+/// it. Opening a profile and decrypting a password run on this actor, off
+/// the main actor the caller runs on.
 actor FFPWStore {
     private var handle: OpaquePointer?
 
-    /// Opens `profilePath`. Since most profiles carry no Primary Password,
-    /// this also tries an empty one; `needsPassword` on the result tells the
-    /// caller whether to show a prompt before anything else works.
+    /// ffpw_open tries an empty Primary Password on the way, since most
+    /// profiles carry none. `needsPassword` on the result tells the caller
+    /// to prompt. `count`, `entries` and `search` stay empty until `unlock`
+    /// succeeds.
     func open(profilePath: String) -> (needsPassword: Bool, error: FFPWError?) {
         var newHandle: OpaquePointer?
         let status = profilePath.withCString { cPath in
@@ -88,10 +89,10 @@ actor FFPWStore {
         return ffpw_count(handle)
     }
 
-    /// Every matching index. SwiftUI virtualizes the list, so this call
-    /// hands back the whole match set. Sized to `count()` up front, and
-    /// calling `ffpw_search` once just for the total and again to fill it,
-    /// since no query can match more entries than the store holds.
+    /// Every matching index. NSTableView draws the visible rows only, so
+    /// handing back the whole match set costs one UInt32 per match. The
+    /// buffer is sized to `count()`, since no query matches more entries
+    /// than the store holds, and that takes one `ffpw_search` call.
     func search(_ query: String) -> [UInt32] {
         guard let handle else { return [] }
         let capacity = ffpw_count(handle)
@@ -106,9 +107,9 @@ actor FFPWStore {
     }
 
     /// Every entry's display data (hostname, username, kind, timestamp) in
-    /// one round trip. Hostnames and usernames are already decrypted by the
-    /// time `open`/`unlock` returns, so this is a struct copy per entry, not
-    /// real work worth an async fetch or a loading state per row.
+    /// one round trip. `open` and `unlock` decrypt the hostnames and
+    /// usernames before they return, so this call copies one struct per
+    /// entry. A row needs no fetch of its own and no loading state.
     func entries() -> [Entry] {
         guard let handle else { return [] }
         let count = ffpw_count(handle)
@@ -120,8 +121,8 @@ actor FFPWStore {
         return (0..<min(written, count)).map { decodeEntry(raw[$0], id: $0) }
     }
 
-    /// The caller must call `Secret.forget()` once done with the result,
-    /// which wipes and frees it through this same actor.
+    /// The caller must call `Secret.forget()` on the result. That wipes the
+    /// C buffer and frees it through this actor.
     func reveal(at index: UInt32) -> Result<Secret, FFPWError> {
         guard let handle else { return .failure(.noProfile) }
         var buf: UnsafeMutablePointer<CChar>?
@@ -138,10 +139,12 @@ actor FFPWStore {
     }
 }
 
-/// A revealed password. Holds the raw buffer alive until `forget()` runs, so
-/// the store wipes it. Swift's own deallocation leaves the bytes behind.
-/// `@unchecked Sendable`: the raw pointer only ever crosses into `store`,
-/// which is itself an actor and re-serializes access to it.
+/// A revealed password. It holds the C buffer alive until `forget()` runs,
+/// and `forget()` is what wipes the bytes. Releasing the pointer any other
+/// way leaves the password in memory.
+///
+/// `@unchecked Sendable` holds because the pointer only ever crosses into
+/// `store`, and that actor serializes the access.
 struct Secret: @unchecked Sendable {
     let value: String
     private let store: FFPWStore

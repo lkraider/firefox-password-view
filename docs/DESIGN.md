@@ -60,7 +60,7 @@ wrong password, so the `primary` fixture covers it.
 Since Firefox 67 the `[InstallXXXX]` section names the profile for a given
 installation. `Default=1` under `[ProfileN]` is the pre-67 fallback. On the
 measured machine `Default=1` sits on a profile that contains no `key4.db`,
-and the real profile is named only by the install section. Resolution reads
+and the install section names the profile Firefox opens. Resolution reads
 the install section first.
 
 ### Sync tombstones and the non-web schemes

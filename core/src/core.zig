@@ -32,9 +32,10 @@ const ffpw_entry = extern struct {
 const flag_account_credential: u32 = 1 << 0;
 const flag_extension: u32 = 1 << 1;
 
-/// The opaque ffpw_store. Wraps a Zig Store plus everything it needs before
-/// one exists: its own allocator and Io, and the profile path, so ffpw_open
-/// can hand back a handle even when a Primary Password is still needed.
+/// The opaque ffpw_store. `store` stays null while a Primary Password is
+/// pending, so ffpw_open can return a handle the caller passes to
+/// ffpw_unlock. The allocator, the Io and the path live here to survive
+/// that gap.
 const CStore = struct {
     gpa: std.mem.Allocator,
     threaded: std.Io.Threaded,
@@ -42,10 +43,9 @@ const CStore = struct {
     store: ?store_mod.Store = null,
 };
 
-/// mem.Allocator.free ignores the length it is given for this allocator
-/// specifically. It frees by pointer, through libc free(). So ffpw_reveal
-/// and ffpw_secret_free can hand a caller a shorter length than the store's
-/// own arena allocations, and the allocation still frees intact.
+/// This allocator frees by pointer, through libc free(). mem.Allocator.free
+/// ignores the length it is given. A caller that passes ffpw_secret_free a
+/// length shorter than the allocation still frees the whole allocation.
 const gpa = std.heap.c_allocator;
 
 /// ffpw_open's first attempt always uses an empty password. WrongPassword
@@ -82,8 +82,8 @@ fn resolveFirefoxDir() ![]u8 {
     return std.fs.path.join(gpa, &.{ home, "Library/Application Support/Firefox" });
 }
 
-/// Reads profiles.ini fresh and enumerates it. The caller frees the result
-/// with `freeProfileList`.
+/// Reads profiles.ini on every call. The caller frees the result with
+/// `freeProfileList`.
 fn listProfiles(io: std.Io) ![]profiles.Profile {
     const firefox_dir = try resolveFirefoxDir();
     defer gpa.free(firefox_dir);
@@ -151,9 +151,8 @@ export fn ffpw_open(profile_path_c: ?[*:0]const u8, out: ?*?*CStore) callconv(.c
     const opened = store_mod.Store.open(gpa, io, cstore.profile_path, "") catch |err| {
         const status = mapOpenError(err);
         if (status == .err_needs_password) {
-            // Still a live handle: the caller must supply the real Primary
-            // Password through ffpw_unlock, then release it with
-            // ffpw_close either way.
+            // The handle stays alive for the ffpw_unlock call that follows.
+            // The caller releases it with ffpw_close.
             out_ptr.* = cstore;
         } else {
             gpa.free(cstore.profile_path);
@@ -235,9 +234,9 @@ export fn ffpw_entry_at(handle: ?*CStore, i: u32, out: ?*ffpw_entry) callconv(.c
     return .ok;
 }
 
-/// Hostnames and usernames are already decrypted by the time `ffpw_open`
-/// or `ffpw_unlock` returns. This costs one struct copy per entry, and it
-/// fills a whole list in one call. One call per row is the alternative.
+/// `ffpw_open` and `ffpw_unlock` decrypt every hostname and username before
+/// they return, so filling the whole list here costs one struct copy per
+/// entry. Calling `ffpw_entry_at` per row costs one FFI call per row.
 export fn ffpw_entries(handle: ?*CStore, out: ?[*]ffpw_entry, cap: usize) callconv(.c) usize {
     const cstore = handle orelse return 0;
     const s = cstore.store orelse return 0;
@@ -267,8 +266,8 @@ export fn ffpw_reveal(handle: ?*CStore, i: u32, out: ?*?[*]u8, len: ?*usize) cal
         };
     };
 
-    // Sized to exactly plain.len. A caller that later frees exactly len
-    // bytes then wipes every byte of the allocation.
+    // Sized to exactly plain.len. ffpw_secret_free wipes the len bytes it
+    // is handed, and that covers the whole allocation.
     const owned = cstore.gpa.alloc(u8, plain.len) catch return .err_oom;
     @memcpy(owned, plain);
     out_ptr.* = owned.ptr;

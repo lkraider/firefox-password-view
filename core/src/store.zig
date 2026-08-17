@@ -1,7 +1,6 @@
-//! Owns one profile's decrypted state: the arena every string in `entries`
-//! lives in, the keys `reveal` decrypts with, and the search filter. Both
-//! front ends match identically because the filter lives here, outside
-//! either one of them.
+//! Owns one profile's decrypted state. The arena holds every string in
+//! `entries`. `keys` decrypts a revealed password. The search filter lives
+//! here, so the TUI and the macOS app match the same way.
 
 const std = @import("std");
 const keydb = @import("keydb.zig");
@@ -18,10 +17,9 @@ pub const Store = struct {
     tombstones_skipped: usize,
     malformed: usize,
 
-    /// Opens `profile_path`/key4.db and `profile_path`/logins.json, decrypts
-    /// every username, and keeps every password's SDR blob for `reveal`.
-    /// `backing` is only used while opening. Everything returned lives in
-    /// the arena this `Store` owns from here on.
+    /// Decrypts every username here, and keeps each password as its SDR blob
+    /// for `reveal`. `backing` serves the open itself. Everything returned
+    /// lives in the arena this `Store` owns from here on.
     pub fn open(
         backing: std.mem.Allocator,
         io: std.Io,

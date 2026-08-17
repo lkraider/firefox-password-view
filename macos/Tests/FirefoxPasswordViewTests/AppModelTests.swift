@@ -4,7 +4,8 @@ import Testing
 @MainActor
 struct AppModelTests {
     /// The chrome://FirefoxAccounts password is Mozilla Account sync key
-    /// material, so one activation must not show it.
+    /// material. The first activation asks for confirmation and shows
+    /// nothing.
     @Test func theAccountRowNeedsASecondActivation() async {
         let model = await openSyncShaped()
         guard let row = model.entries.firstIndex(where: { $0.isAccountCredential }) else {

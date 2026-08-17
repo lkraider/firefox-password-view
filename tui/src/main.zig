@@ -13,8 +13,8 @@ const masked_password = "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
 
 /// Every error store.zig and its dependencies can produce, given a message a
 /// person can act on. The store has no fixed error set (it is `!T`
-/// throughout), so the fallback branch exists for real: a DER or PBES2
-/// parse error a person cannot do anything about beyond reporting a bug.
+/// throughout), so the fallback branch catches the rest. A DER or PBES2
+/// parse error lands there, and the answer to one is a bug report.
 fn friendlyMessage(err: anyerror) []const u8 {
     return switch (err) {
         error.WrongPassword => "wrong Primary Password",
@@ -126,9 +126,9 @@ const Model = struct {
 
     password_field: SecretField,
     password_error: bool = false,
-    /// Set when opening the profile failed for a reason other than a wrong
-    /// or missing Primary Password. Nothing is interactive at that point;
-    /// the screen just states why and waits to be quit.
+    /// Set when the profile failed to open with a message the user cannot
+    /// act on. The screen then shows that message and accepts `q`. A wrong
+    /// Primary Password sets `password_error` and keeps the prompt.
     open_error: bool = false,
 
     store: ?store_mod.Store = null,
@@ -198,9 +198,9 @@ const Model = struct {
         self.status_line.text = self.status[0..self.status_len];
     }
 
-    /// Never propagates an error: every failure ends in either
-    /// `password_error` (ask again) or `open_error` (nothing to do but
-    /// quit), each paired with a message in `statusMessage`.
+    /// Returns no error. A wrong Primary Password sets `password_error`,
+    /// and the prompt asks again. Every other failure sets `open_error` and
+    /// a message through `setStatus`.
     fn tryOpen(self: *Model, password: []const u8) void {
         const s = store_mod.Store.open(self.gpa, self.io, self.profile_path, password) catch |err| {
             switch (err) {
@@ -355,10 +355,10 @@ const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         switch (event) {
             .init, .focus_in => {
-                // Focus routing (path_to_focused) only becomes correct after
-                // the first draw. Without forcing one here, a key typed
-                // before an incidental redraw (e.g. a resize) would be
-                // routed using a stale, possibly-empty path.
+                // Focus routing (path_to_focused) becomes correct after the
+                // first draw, so this asks for that draw now. A key typed
+                // before the next incidental redraw (a resize, say) would
+                // otherwise route through a stale, possibly-empty path.
                 ctx.redraw = true;
                 return ctx.requestFocus(self.focusForMode());
             },
@@ -488,8 +488,8 @@ const Model = struct {
         return self.composite(ctx, max, &.{ label_surface, field_surface });
     }
 
-    /// Every screen is one Surface holding a fixed set of already-drawn
-    /// children. This is the one place that assembles it.
+    /// Every screen is one Surface over already-drawn children. The draw
+    /// paths differ only in the children they pass here.
     fn composite(self: *Model, ctx: vxfw.DrawContext, size: vxfw.Size, children: []const vxfw.SubSurface) !vxfw.Surface {
         return .{
             .size = size,

@@ -8,7 +8,7 @@ const KeyValue = struct { key: []const u8, value: []const u8 };
 const Section = struct { name: []const u8, fields: []const KeyValue };
 
 /// Splits `ini` into sections, in file order. Every string in the result
-/// points into `ini`; nothing here is duplicated. The caller frees each
+/// points into `ini`, so the result dies with it. The caller frees each
 /// section's `fields` and the returned slice, both with `gpa`.
 fn parseSections(gpa: std.mem.Allocator, ini: []const u8) std.mem.Allocator.Error![]Section {
     var sections: std.ArrayList(Section) = .empty;
@@ -95,10 +95,10 @@ pub const Profile = struct {
     path: []const u8,
 };
 
-/// Every `[ProfileN]` section in profiles.ini, in file order. A test machine
-/// can carry a profile with no key4.db at all (an abandoned pre-migration
-/// profile), so a viewer that only ever opens `resolveDefault`'s pick cannot
-/// explain what it is showing. This lets a front end offer the rest.
+/// Every `[ProfileN]` section in profiles.ini, in file order.
+/// `resolveDefault` returns one path. A profile Firefox abandoned carries no
+/// key4.db, and opening it fails, so a front end needs the other sections to
+/// fall back on.
 pub fn enumerate(gpa: std.mem.Allocator, firefox_dir: []const u8, ini: []const u8) std.mem.Allocator.Error![]Profile {
     const sections = try parseSections(gpa, ini);
     defer freeSections(gpa, sections);

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Drives the installed Firefox over Marionette to write fixture profiles.
 
-Fixtures must be produced by real Firefox writing real NSS output. A
-generator that encodes this project's own reading of key4.db and
-logins.json would only show the reader agrees with itself. See
+The installed Firefox writes every fixture, so the bytes come from NSS. A
+generator built on this project's own reading of key4.db and logins.json
+would show that the reader agrees with itself. See
 core/testdata/README.md for what each fixture covers.
 
 Usage:
