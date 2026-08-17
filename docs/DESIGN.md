@@ -149,6 +149,28 @@ tui/src/        the libvaxis TUI, imports store.zig through root.zig
 macos/          the SwiftUI app, a Swift package linking core.zig's static library
 ```
 
+## Linking the core from another front end
+
+`zig build` installs the static library at `zig-out/lib/libffpw.a` and the
+header at `zig-out/include/ffpw.h`. A front end links those two. Any
+language with a C FFI can call them. The SwiftUI app links them through a
+raw `-L`/`-l` flag and uses no bridging header.
+
+Call `ffpw_open` first. It returns `FFPW_ERR_NEEDS_PASSWORD` for a profile
+with a Primary Password, so call `ffpw_unlock` next. Then `ffpw_entries`
+fills a whole list in one call, `ffpw_search` filters it, and `ffpw_reveal`
+returns one password. Release that password with `ffpw_secret_free`. It
+zeroes the buffer before freeing it. One `ffpw_store` belongs to one
+thread.
+
+`core/test/smoke.c` calls every function in the header in order and runs as
+`zig build smoke`.
+
+The decryption modules call no OS-specific API. The macOS assumptions live
+in the front ends and in two helpers: `core.zig` and `tui/src/main.zig`
+build the profile directory as `$HOME/Library/Application Support/Firefox`,
+and `tui/src/main.zig` copies by running `pbcopy`.
+
 ## Build and platform notes
 
 `/usr/lib/libsqlite3.dylib` does not exist as a file on macOS 11 and later.
