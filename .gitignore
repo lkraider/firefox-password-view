@@ -8,6 +8,9 @@ zig-pkg/
 # Swift Package Manager build artifacts for macos/.
 macos/.build/
 
+# scripts/package-release.sh's output directory.
+dist/
+
 .DS_Store
 
 # Anything extracted from a profile. Never commit key material.
