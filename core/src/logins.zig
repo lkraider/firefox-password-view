@@ -43,9 +43,9 @@ fn classify(hostname: []const u8) Kind {
     return .normal;
 }
 
-/// Decrypts a base64 SDR field into `out`. Checks the cipher before asking
-/// for a key, so a profile carrying only a 3DES key still reports
-/// `LegacyTripleDes`. `NoSdrKey` names the wrong cause.
+/// Decrypts a base64 SDR field into `out`. The blob names its own cipher,
+/// so this reads the cipher before it asks for a key. A profile carrying
+/// only a 3DES key then reports `LegacyTripleDes`.
 fn decryptField(b64: []const u8, keys: keydb.Keys, scratch: []u8, out: []u8) ![]u8 {
     const decoder = std.base64.standard.Decoder;
     const n = try decoder.calcSizeForSlice(b64);

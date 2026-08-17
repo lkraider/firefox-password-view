@@ -12,9 +12,9 @@ pub const Error = error{
     NoSdrKey,
 } || pbes2.Error;
 
-/// A profile can carry both keys at once. Firefox 144 adds the 32-byte key and
-/// leaves the 24-byte one in place, so the row count alone cannot pick between
-/// them. The decrypted length does.
+/// A profile can carry both keys at once. Firefox 144 adds the 32-byte key
+/// and leaves the 24-byte one in place, both under the same CKA_ID. `load`
+/// tells them apart by decrypted length.
 pub const Keys = struct {
     aes256: ?[32]u8 = null,
     des3: ?[24]u8 = null,

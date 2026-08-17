@@ -1,9 +1,8 @@
 # Firefox Password View — macOS app
 
 This is a Swift package. Xcode Command Line Tools are enough to build,
-test and run it. No codesigning identity is needed, since `swift build`
-ad-hoc signs its output. A full Xcode install also opens this package
-directly.
+test and run it. `swift build` ad-hoc signs its output, so this needs no
+signing identity. A full Xcode install also opens this package directly.
 
 ## Building
 
@@ -14,9 +13,9 @@ swift build
 ```
 
 `Package.swift` links `libffpw.a` through a raw `-L`/`-l` flag. That puts
-the file outside SwiftPM's dependency graph, so SwiftPM treats a changed
-`libffpw.a` as no reason to relink. Run `rm -rf macos/.build` before
-`swift build` any time `libffpw.a` changes.
+the file outside SwiftPM's dependency graph, so SwiftPM keeps the binary it
+linked last even after `libffpw.a` changes. Run `rm -rf macos/.build`
+before `swift build` any time `libffpw.a` changes.
 
 ## Running
 
@@ -33,10 +32,9 @@ open .build/release/FirefoxPasswordView.app
 
 `scripts/bundle.sh` builds release by default, the Zig core with
 `-Doptimize=ReleaseSafe` and the app with `swift build -c release`. Debug
-turns off Zig's inlining and Swift's whole-module optimization. Filtering
-and reveal feel sluggish in a Debug build, so judge performance on a
-release build. Pass `debug` for a fast dev rebuild:
-`scripts/bundle.sh debug`.
+turns off Zig's inlining and Swift's whole-module optimization, and
+filtering and reveal slow down. Measure performance on a release build.
+Pass `debug` for a fast dev rebuild: `scripts/bundle.sh debug`.
 
 ## Testing
 

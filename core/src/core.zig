@@ -1,6 +1,5 @@
 //! Exports the C ABI declared in core/include/ffpw.h. Swift and C link
-//! against this file. The TUI imports store.zig directly and uses none of
-//! it.
+//! against this file. The TUI imports store.zig through root.zig.
 
 const std = @import("std");
 const c = @import("c");

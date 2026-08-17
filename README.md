@@ -47,14 +47,14 @@ is shown. The macOS app shows the same data under the same rules.
 
 ## Limits
 
-This reads a profile. It never writes one. `key4.db` opens
-`SQLITE_OPEN_READONLY`, so running this against a profile Firefox has open
-cannot corrupt it.
+This reads a profile and writes nothing back. `key4.db` opens
+`SQLITE_OPEN_READONLY`, so it is safe to run while Firefox has the profile
+open.
 
 It cannot read these profiles:
 
-- One with a Primary Password you do not know. This decrypts with the
-  password you type. It recovers nothing.
+- One with a Primary Password you do not know. Decryption uses the
+  password you type. There is no recovery path.
 - One that Firefox 144 or newer has never opened. Those hold
   3DES-encrypted entries only. This tool reports 3DES per entry and stops
   there.
@@ -87,8 +87,8 @@ zig build tui      # run the TUI
 zig build smoke    # the C ABI smoke test
 ```
 
-`zig build test` needs no Firefox install and no profile of your own. It
-reads only `core/testdata/`.
+`zig build test` reads only `core/testdata/`. It runs on a machine with no
+Firefox installed.
 
 The macOS app is a separate Swift package. See
 [`macos/README.md`](macos/README.md) for how to build and test it.

@@ -111,10 +111,10 @@ struct EntryTableView: NSViewRepresentable {
         }
 
         /// Answers from `lastMatchedIndices`, the snapshot the last reload
-        /// ran against. Reading `model.matchedIndices` here reports a count
-        /// AppKit has not been told to reload for, so between an AppModel
-        /// write and the reload that follows it, the row count and the rows
-        /// come from different match sets.
+        /// ran against. `model.matchedIndices` can already hold a newer set
+        /// between an AppModel write and the reload that follows it. AppKit
+        /// would then take its row count from one match set and its rows
+        /// from another.
         func numberOfRows(in tableView: NSTableView) -> Int {
             lastMatchedIndices.count
         }
@@ -139,8 +139,8 @@ struct EntryTableView: NSViewRepresentable {
             }
 
             // A local, so the two closures below capture it and leave self
-            // uncaptured. The Coordinator outlives them either way, and the
-            // table holds it.
+            // uncaptured. The table holds the Coordinator, so it outlives
+            // both closures.
             let model = self.model
 
             // Indexed against the same snapshot numberOfRows answered from,
@@ -149,9 +149,10 @@ struct EntryTableView: NSViewRepresentable {
             let index = lastMatchedIndices[row]
             let entry = entry(forRow: row)
             // Both of these come from the model, so the flag and the secret
-            // below always describe the same entry. Taking the flag from
-            // lastRevealedIndex instead pairs one row's flag with another
-            // row's secret whenever a reveal lands before its reload does.
+            // below always describe the same entry. `lastRevealedIndex`
+            // still holds the previous row until the reload for a reveal
+            // runs, and the flag would then belong to a different row than
+            // the secret.
             let isRevealed = model.revealedIndex == index
             hostingView.rootView = EntryRowContent(
                 entry: entry,

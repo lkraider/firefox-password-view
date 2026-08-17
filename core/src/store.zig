@@ -50,8 +50,8 @@ pub const Store = struct {
     }
 
     /// Wipes every decrypted username before freeing the arena that holds
-    /// them. `reveal` puts no password in this arena. It decrypts straight
-    /// into the caller's buffer, and the caller wipes it.
+    /// them. `reveal` decrypts into the caller's buffer, and the caller
+    /// wipes that one.
     pub fn deinit(self: *Store) void {
         for (self.entries) |e| {
             std.crypto.secureZero(u8, @constCast(e.username));

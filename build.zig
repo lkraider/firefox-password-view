@@ -2,14 +2,15 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     // b.standardTargetOptions resolves the target here, then the line
-    // below pins its cpu to a baseline. Passing an explicit default_target
-    // instead skips the native-SDK auto-detection standardTargetOptions
-    // runs for an empty query. sqlite3 needs that auto-detection to link.
-    // core_lib_mod below hits the same link failure, for a different
-    // reason. Left at "native", two machines with different Apple Silicon
-    // generations resolve to a different cpu.model. Verified: this
-    // machine's M1 resolves to apple_m1. Zig then picks different codegen
-    // for the same source and produces a different binary.
+    // below pins its cpu to a baseline. standardTargetOptions runs the
+    // native-SDK auto-detection for an empty query, and sqlite3 needs that
+    // detection to link. An explicit default_target passed to it skips the
+    // detection. core_lib_mod below hits the same link failure, for a
+    // different reason.
+    //
+    // The baseline pin makes the binary reproducible across machines. A
+    // "native" cpu resolves to the host's Apple Silicon generation, this
+    // machine's M1 to apple_m1, and Zig picks its codegen from that.
     var target = b.standardTargetOptions(.{});
     target.result.cpu = std.Target.Cpu.baseline(target.result.cpu.arch, target.result.os);
     const optimize = b.standardOptimizeOption(.{});
@@ -93,10 +94,9 @@ pub fn build(b: *std.Build) void {
 
     // C ABI static library. It shares `target` with everything else above,
     // so -Dtarget applies to it too. Releases ship a single aarch64-macos
-    // slice, and no lipo step runs. Resolving a target query here instead
-    // would use an explicit query, even one matching the host, and that
-    // skips the native-SDK auto-detection standardTargetOptions gets.
-    // sqlite3 needs that auto-detection to link.
+    // slice, and no lipo step runs. Resolving a fresh target query here
+    // would pass an explicit query, even one matching the host, and that
+    // skips the native-SDK auto-detection sqlite3 needs to link.
     const lib_translate_c = b.addTranslateC(.{
         .root_source_file = b.path("core/src/c.h"),
         .target = target,

@@ -16,11 +16,10 @@ path. The measurements come from a live Firefox 152.0.6 profile on macOS
   value under `id = 'password'`. `nssPrivate` holds the wrapped master keys.
 - `cert9.db` — certificate store, unused here.
 
-Both tables hold rows this reader has to skip. `metaData` also holds
-`sig_key_*` rows, so the query selects `id = 'password'`. `nssPrivate`
-also holds non-key objects, so the query filters on CKA_ID and object
-class. Both queries are in `keydb.zig`. Taking the first row of either
-table returns the wrong bytes.
+`metaData` also holds `sig_key_*` rows, so `keydb.zig` selects
+`id = 'password'`. `nssPrivate` also holds non-key objects, so the same
+file filters on CKA_ID `f8000000000000000000000000000001` and object class
+`a0 = x'00000004'`.
 
 ### Two master keys, one key id
 
@@ -33,17 +32,18 @@ A profile Firefox 144 has opened holds **two** rows under CKA_ID
 | 32 bytes | 24 bytes | legacy 3DES |
 | 48 bytes | 32 bytes | AES-256, added by Firefox 144 |
 
-Firefox 144 adds the AES-256 key and leaves the 3DES key in place. Reading one
-row returns the legacy key, and every AES entry then fails its PKCS7 check.
-Both rows are unwrapped and sorted by decrypted length.
+Firefox 144 adds the AES-256 key and leaves the 3DES key in place.
+`keydb.zig` unwraps both rows and picks by decrypted length. The 3DES row
+comes first in insertion order, so a reader that stops at the first row
+decrypts every AES entry with the legacy key and fails its PKCS7 check.
 
 ### Firefox 144 migrated the whole store at once
 
-An entry's timestamps say nothing about its cipher. Read the OID from the
-entry. On the measured profile, 1625 of the 1701 entries predate October
-2025 and the oldest dates to March 2011, and all 1701 use AES-256. The
-144 upgrade re-encrypted every entry in one pass. The `unmigrated` and
-`migrated` fixtures are the same profile before and after that pass.
+Read an entry's cipher from its OID. On the measured profile, 1625 of the
+1701 entries predate October 2025 and the oldest dates to March 2011. All
+1701 use AES-256, so the timestamps predict nothing. The 144 upgrade
+re-encrypted every entry in one pass. The `unmigrated` and `migrated`
+fixtures are the same profile before and after that pass.
 
 ### A Primary Password changes the global salt's size and the seed hash
 
@@ -66,23 +66,22 @@ the install section first.
 ### Sync tombstones and the non-web schemes
 
 A profile synced to a Mozilla Account uses the same encryption as any
-other profile. It adds records that a reader written against an unsynced
-profile mishandles.
+other profile. It adds deletion tombstones and rows whose hostname carries
+a non-web scheme.
 
 A tombstone carries `{deleted: true, everSynced, guid, id, syncCounter,
 timePasswordChanged}` and no hostname or encrypted field. These are
-deletions held for propagation to other devices. A reader that treats a
-missing hostname as an error reports every tombstone as a failure.
-`logins.zig` counts them under `tombstones_skipped` and leaves them out
-of the entry list. The `sync-shaped` fixture carries two.
+deletions held for propagation to other devices. `logins.zig` counts them
+under `tombstones_skipped` and leaves them out of the entry list. The
+`sync-shaped` fixture carries two.
 
 One entry has `hostname = chrome://FirefoxAccounts` and
 `httpRealm = Firefox Accounts credentials`. Its username is the Mozilla
 Account email, and its decrypted password is a JSON document holding sync
 key material. Revealing it hands over the whole Mozilla Account. The store
 labels this row `account_credential`. Entries can also carry a
-`moz-extension://` origin, labelled `extension`. Hostname parsing must not
-assume `http` or `https`.
+`moz-extension://` origin, labelled `extension`. A hostname here carries
+any scheme.
 
 ## The decryption chain
 
@@ -98,10 +97,10 @@ plain = AES-256-CBC-decrypt(ciphertext, key, iv), PKCS7 stripped
 ```
 
 The IV element carries a 14-byte body. NSS feeds the two header octets plus
-that body to AES as the 16-byte IV. Passing the body alone produces garbage.
+that body to AES as the 16-byte IV.
 
 `iterations` was 1 on a never-initialized token and 10000 once a Primary
-Password is set. It is read from the structure either way.
+Password is set. The reader takes the value from the structure.
 
 **Decrypting a logins.json field:** base64-decode, then parse
 `SEQUENCE { OCTET keyId, SEQUENCE { OID cipher, OCTET iv }, OCTET ciphertext }`.
@@ -110,7 +109,6 @@ the 32-byte master key.
 
 `metaData.item2` decrypts to the ASCII string `password-check`. This
 confirms the Primary Password before any key material is unwrapped.
-Checking it needs no credential.
 
 ## Decisions
 
@@ -183,7 +181,7 @@ Windows ships no system SQLite. Before a Windows target, vendor the SQLite
 amalgamation and compile it with Zig's bundled clang. That also makes
 macOS and Linux builds hermetic. The rejected alternative, a hand-written
 reader for the SQLite page format, needs varint decoding, overflow pages
-and freelist handling on a read path that must not return wrong bytes.
+and freelist handling.
 
 macOS App Sandbox needs a per-run open panel before it allows reading
 another app's data directory. Outside the sandbox, `~/Library/Application
@@ -199,8 +197,7 @@ Support` is not TCC-protected, so no permission prompt appears.
   Firefox 152.0.6 running with its `.parentlock` held, decrypting the
   same 1701 entries as a closed-Firefox run, and no `key4.db-wal`
   appeared. A read landing mid-write with a WAL file present is
-  untested. Reaching that state needs a write to a live profile. No test
-  here performs one.
+  untested. Reaching that state needs a write to a live profile.
 - `zig build test --fuzz` does not run on the pinned Zig 0.16.0. Zig's
   bundled `test_runner.zig` passes a `*builtin.StackTrace` to
   `std.debug.writeStackTrace`, whose signature now wants

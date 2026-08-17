@@ -21,9 +21,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - macOS app: each entry row is a button carrying an accessibility label
-  and action. Revealing and copying a password previously needed a mouse
-  click, since a tap gesture offers VoiceOver and the keyboard nothing to
-  activate.
+  and action. A tap gesture drew the row before. A tap gesture carries no
+  accessibility action, so revealing and copying a password took a mouse
+  click.
 
 ## [1.0.0] - 2026-08-16
 
