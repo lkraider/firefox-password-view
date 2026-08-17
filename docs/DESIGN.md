@@ -16,10 +16,15 @@ path. The measurements come from a live Firefox 152.0.6 profile on macOS
   value under `id = 'password'`. `nssPrivate` holds the wrapped master keys.
 - `cert9.db` — certificate store, unused here.
 
-`metaData` also holds `sig_key_*` rows, so `keydb.zig` selects
-`id = 'password'`. `nssPrivate` also holds non-key objects, so the same
+`metaData` also holds `sig_key_*` rows, so `keydb.zig` matches
+`id = "password"`. `nssPrivate` also holds non-key objects, so the same
 file filters on CKA_ID `f8000000000000000000000000000001` and object class
-`a0 = x'00000004'`.
+`a0 = 00 00 00 04`.
+
+`core/src/sqlitedb.zig` reads the SQLite file format directly, so no SQL
+runs. It maps `a0`, `a11` and `a102` to record positions through the
+`CREATE TABLE` text, because `nssPrivate` declares 192 columns in one
+profile and 193 in another.
 
 ### Two master keys, one key id
 
@@ -118,10 +123,12 @@ confirms the Primary Password before any key material is unwrapped.
 | 3DES | Not implemented. `sdr.decrypt` returns `LegacyTripleDes` | A DES implementation adds roughly 300 lines of legacy cipher that 0 of 1701 entries need |
 | DER | Own bounds-checked reader | `std.crypto.Certificate.der` has no bounds checks, no canonical-form checks and no tests (ziglang/zig#19775) |
 | C interop | `b.addTranslateC` | `@cImport` is deprecated in Zig 0.16 |
-| SQLite | System library for now | Windows ships none. See Build and platform notes below |
+| SQLite | `core/src/sqlitedb.zig`, a 418-line read-only reader for the file format | The vendored amalgamation is 262899 lines and puts an 803840-byte exe on Windows against a 4608-byte no-libc baseline. It also carries a version-bump obligation for CVEs that never reach a fixed SQL statement |
+| Win32 | Hand-written externs in `win/src/win32.zig` | `zigwin32` is a generated source tree of about 300 MB |
+| Windows UI | Windows mechanisms for every macOS feature: a `Profile` menu, a context menu, `MessageBoxW`, a `DIALOGEX` template | Porting a SwiftUI layout puts macOS interactions in a Windows app |
 | Zig | Pin 0.16.0 | Tracking master breaks on each stdlib redesign |
 | Reveal | Masked by default, reveal one entry, copy to clipboard | Printing every password fills terminal scrollback |
-| Architecture | Ship one `aarch64-macos` slice | A universal binary adds a lipo step and a second build for an architecture no release targets |
+| Architecture | Ship one `aarch64-macos` slice, plus `x86_64-windows` and `aarch64-windows` | A macOS universal binary adds a lipo step and a second build for an architecture no release targets |
 | Fixtures | Written by an installed Firefox over Marionette, committed under `core/testdata/` | A generator built from this project's own reading of the format would only show the reader agrees with itself |
 
 ## Module layout
@@ -134,18 +141,29 @@ core/src/
   pbes2.zig      unwraps key4.db values
   sdr.zig        parses logins.json blobs
   profiles.zig   resolves and enumerates profiles
+  sqlitedb.zig   read-only reader for the SQLite file format
   keydb.zig      reads key4.db, returns the master keys
   logins.zig     decrypts and classifies logins.json entries
   store.zig      owns the arena, the keys, the entries, and the search filter
-  core.zig       exports the C ABI both front ends link, core/include/ffpw.h
+  messages.zig   the text a front end shows for a core failure
+  core.zig       exports the C ABI the macOS app links, core/include/ffpw.h
   root.zig       the module a front end imports through
   main.zig       validation probe
-  c.h            sqlite3 and stdlib headers for addTranslateC
+  c.h            the stdlib header for addTranslateC, for getenv
   tests.zig      NIST and DER vectors, and fixture round-trips
+core/test/
+  oracle.zig     diffs sqlitedb.zig against the system sqlite3
+  smoke.c        calls every function in ffpw.h
 build.zig
 tui/src/        the libvaxis TUI, imports store.zig through root.zig
 macos/          the SwiftUI app, a Swift package linking core.zig's static library
+win/src/        the Win32 app, importing the core module directly
 ```
+
+`win/src/` splits the same way the macOS app does. `model.zig` holds every
+rule and calls no Win32 function, so `zig build test` runs its tests on the
+build host. `main.zig` owns the window, the timers and the dialogs.
+`win32.zig` holds the externs and `clipboard.zig` the clipboard writer.
 
 ## Linking the core from another front end
 
@@ -165,23 +183,34 @@ thread.
 `zig build smoke`.
 
 The decryption modules call no OS-specific API. The macOS assumptions live
-in the front ends and in two helpers: `core.zig` and `tui/src/main.zig`
-build the profile directory as `$HOME/Library/Application Support/Firefox`,
-and `tui/src/main.zig` copies by running `pbcopy`.
+in the front ends. `core.zig` and `tui/src/main.zig` build the profile
+directory as `$HOME/Library/Application Support/Firefox`, and
+`tui/src/main.zig` copies by running `pbcopy`. `win/src/main.zig` builds
+`%APPDATA%\Mozilla\Firefox` and copies through `SetClipboardData`.
 
 ## Build and platform notes
 
-`/usr/lib/libsqlite3.dylib` does not exist as a file on macOS 11 and later.
-It lives in the dyld shared cache, and linking resolves through the SDK
-stub at `$(xcrun --show-sdk-path)/usr/lib/libsqlite3.tbd`. Building
-therefore needs the Command Line Tools, and cross-compiling to macOS from
-another host does not work as configured.
+`libsqlite3` reaches only `core/test/oracle.zig`, and that test builds on a
+macOS host. `/usr/lib/libsqlite3.dylib` lives in the dyld shared cache on
+macOS 11 and later, and linking resolves through the SDK stub at
+`$(xcrun --show-sdk-path)/usr/lib/libsqlite3.tbd`. Pass `-Doracle=false` on
+a host without the Command Line Tools. The C ABI library still links libc,
+and that link needs the same SDK, so cross-compiling `libffpw.a` to macOS
+from another host stays out of reach.
 
-Windows ships no system SQLite. Before a Windows target, vendor the SQLite
-amalgamation and compile it with Zig's bundled clang. That also makes
-macOS and Linux builds hermetic. The rejected alternative, a hand-written
-reader for the SQLite page format, needs varint decoding, overflow pages
-and freelist handling.
+Nothing else links a C library. `zig build -Dtarget=x86_64-windows-gnu`,
+`-Dtarget=aarch64-windows-gnu` and `-Dtarget=x86_64-linux-musl` all run on
+this Mac. Zig bundles a `.def` file for `user32`, `comctl32`, `gdi32`,
+`kernel32`, `dwmapi`, `uxtheme` and `advapi32` under
+`lib/libc/mingw/lib-common/`, and it generates each import library from that
+file, so the Win32 link needs no Windows SDK.
+
+Zig ships no `windows.h`. `win/app.rc` therefore defines every constant it
+uses. Measured: without those defines the compile fails with
+`expected number or number expression; got 'DS_MODALFRAME'`. The same file
+gives the `Profile` popup one separator, because resinator rejects an empty
+block with `empty menu of type 'POPUP' not allowed`, and
+`buildProfileMenu` deletes that separator after it inserts the profiles.
 
 macOS App Sandbox needs a per-run open panel before it allows reading
 another app's data directory. Outside the sandbox, `~/Library/Application
@@ -198,16 +227,21 @@ Support` is not TCC-protected, so no permission prompt appears.
   same 1701 entries as a closed-Firefox run, and no `key4.db-wal`
   appeared. A read landing mid-write with a WAL file present is
   untested. Reaching that state needs a write to a live profile.
+  `sqlitedb.zig` reads the write version at header offset 18 and returns
+  `error.WalJournal` for a value of 2. All six measured files report 1.
 - `zig build test --fuzz` does not run on the pinned Zig 0.16.0. Zig's
   bundled `test_runner.zig` passes a `*builtin.StackTrace` to
   `std.debug.writeStackTrace`, whose signature now wants
   `*debug.StackTrace`. The runner fails to compile. Plain `zig build
   test` still runs the fuzz corpus once, with no mutation.
-- Windows and Linux are deferred. `der`, `oids`, `aescbc`, `pbes2`,
-  `sdr`, `keydb`, `logins` and `store` call no OS-specific API. A Linux
-  TUI needs the profile directory (`~/.mozilla/firefox`) and a clipboard
-  call to replace `pbcopy`. Windows needs both of those and a vendored
-  SQLite.
+- Linux is deferred. The core builds for `x86_64-linux-musl` today. A
+  Linux TUI needs the profile directory (`~/.mozilla/firefox`) and a
+  clipboard call to replace `pbcopy`.
+- The Windows TUI is out of scope. `tui/src/main.zig` calls
+  `std.process.Args.Iterator.init`, and that function is a compile error on
+  Windows. `build.zig` installs `ffpw` only for a non-Windows target.
+- The Windows app follows the system dark-mode setting at startup only. It
+  reads `AppsUseLightTheme` once and handles no `WM_SETTINGCHANGE`.
 - One machine building the release twice produces byte-identical output.
   That holds across a clean cache, a different absolute path, `-j1`
   against `-j4`, and ad-hoc codesigning. Two machines with different

@@ -2,6 +2,35 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- A Windows app under `win/`. It imports the `core` module directly and
+  shows the same list the macOS app shows, through Windows mechanisms: a
+  `Profile` menu, a `SysListView32`, a right-click context menu, a
+  `msctls_statusbar32`, `Ctrl+C` and `Ctrl+F` accelerators, a `DIALOGEX`
+  Primary Password prompt, and a `MessageBoxW` before the Firefox Accounts
+  row gives up its password. Releases ship `x86_64` and `arm64` zips, both
+  cross-compiled from macOS.
+- A copy on Windows sets the four clipboard formats that keep the password
+  out of `Win+V` history and out of the cloud clipboard. The clipboard
+  clears 30 seconds later, and a copy someone else made in between
+  survives.
+- `core/test/oracle.zig` reads every fixture through the new SQLite reader
+  and through the system sqlite3, then compares every column, every rowid
+  and the row order. `core/testdata/overflow.db` covers the overflow and
+  interior-page branches no `key4.db` reaches.
+
+### Changed
+
+- `core/src/sqlitedb.zig` replaces the two SQL statements in `keydb.zig`
+  with a read-only reader for the SQLite file format. Nothing in the build
+  links `libsqlite3` any more except that oracle test, so the core
+  cross-compiles to Windows and Linux from a Mac.
+- `keydb.load` takes an `std.Io` and a plain path. Its error set is
+  unchanged.
+
 ## [1.1.0] - 2026-08-17
 
 ### Added
