@@ -189,10 +189,10 @@ shoot_app() {
     # pgrep pattern built from the symlink matches nothing.
     app_bundle="$(cd "$app_bundle" && pwd -P)"
 
-    # A second instance launched while a first one runs draws an empty entry
-    # list: AppModel fills matchedIndices after the first updateNSView, and
-    # EntryListView reads nothing observable, so no second update arrives to
-    # call reloadData. Capturing that window yields a screenshot with no rows.
+    # One instance at a time, so window_id_for_pid has a single candidate and
+    # the capture cannot pick up somebody else's window. Until b3bb120 a
+    # second instance also drew an empty entry list, which put a screenshot
+    # with no rows in docs/images/.
     if pgrep -f "FirefoxPasswordView.app/Contents/MacOS" >/dev/null 2>&1; then
         echo "quitting a running FirefoxPasswordView first"
         pkill -f "FirefoxPasswordView.app/Contents/MacOS" || true
