@@ -121,8 +121,23 @@ jobs:
           Expand-Archive -Path zig.zip -DestinationPath zig
           Remove-Item zig.zip
 
+      # The first run of this job exited 1 from `zig build test` in 4 seconds
+      # with no output at all. This step names the toolchain that answered.
+      - name: zig version
+        shell: pwsh
+        run: |
+          Get-ChildItem zig | Select-Object Name, Mode
+          .\zig\zig-aarch64-windows-${{ env.ZIG_VERSION }}\zig.exe version
+          .\zig\zig-aarch64-windows-${{ env.ZIG_VERSION }}\zig.exe env
+
       - name: zig build test
-        run: .\zig\zig-aarch64-windows-${{ env.ZIG_VERSION }}\zig.exe build test -Doracle=false
+        shell: pwsh
+        run: |
+          .\zig\zig-aarch64-windows-${{ env.ZIG_VERSION }}\zig.exe build test -Doracle=false 2>&1 | Tee-Object -Variable out
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "zig build test exited $LASTEXITCODE with $($out.Count) output lines"
+            exit $LASTEXITCODE
+          }
 
       - name: zig build win
         run: .\zig\zig-aarch64-windows-${{ env.ZIG_VERSION }}\zig.exe build win -Doracle=false
