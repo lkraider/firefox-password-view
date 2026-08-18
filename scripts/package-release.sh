@@ -28,12 +28,8 @@ ditto -c -k --keepParent \
 # The Windows builds come last, because each one overwrites zig-out and the
 # macOS app links zig-out/lib/libffpw.a.
 #
-# UTM on Apple Silicon runs Windows 11 on ARM64, so the arm64 build is the one
-# that runs natively in the test VM. That same VM runs the x86_64 build under
-# Windows' x64 emulation, so one VM verifies both artifacts.
-#
-# -X drops the extra attributes zip stores per entry, and the touch above
-# fixes the entry's mtime. Two runs then write the same bytes.
+# -X drops the extra attributes zip stores per entry, and the touch in the
+# loop fixes the entry's mtime. Two runs then write the same bytes.
 for pair in "x86_64-windows-gnu x86_64" "aarch64-windows-gnu arm64"; do
     set -- $pair
     (cd "$repo_root" && "$zig" build -Dtarget="$1" -Doptimize=ReleaseSmall)
