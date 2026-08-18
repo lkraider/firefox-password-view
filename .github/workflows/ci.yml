@@ -52,6 +52,13 @@ jobs:
         working-directory: macos
         run: ./scripts/bundle.sh
 
+      # scripts/package-release.sh builds no Linux artifact, and a Linux front
+      # end is planned. The core keeps compiling for this target. The two
+      # Windows targets compile in reproducible-build and in the two Windows
+      # jobs, so this step builds the one target nothing else reaches.
+      - name: Cross-compile the core for Linux
+        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseSafe
+
 
   windows-test:
     # Runs the core tests and builds the app on the platform it ships for.
