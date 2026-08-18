@@ -16,9 +16,12 @@ Apple Silicon macOS, Windows x86_64 and Windows ARM64.
 
 ### Win32
 
+![The Windows app listing the same five logins in a report-view list, with the second row selected and its password revealed, and the status bar showing the login count](docs/images/windows-app.png)
+
 The Windows app shows the same list in a `SysListView32`. A `Profile` menu
 switches profiles, right-click offers Reveal and Copy, and the status bar
-shows the message and the row count.
+shows the message and the row count. The image comes from a wine run, so
+the control theme is wine's own.
 
 ## Installing
 
@@ -164,7 +167,9 @@ nor macOS.
 The macOS app is a separate Swift package. See
 [`macos/README.md`](macos/README.md) for how to build and test it.
 
-`scripts/screenshots.sh` regenerates the two images above.
+`scripts/screenshots.sh` regenerates the three images above. Its `win`
+target needs wine on the Mac that runs it, and `FFPW_WINE` points at another
+build.
 
 ## Layout
 
