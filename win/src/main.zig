@@ -14,6 +14,7 @@ const w = @import("win32.zig");
 const ids = @import("ids.zig");
 const clipboard = @import("clipboard.zig");
 const model_mod = @import("model.zig");
+const text_mod = @import("text.zig");
 
 const class_name = std.unicode.utf8ToUtf16LeStringLiteral("FirefoxPasswordViewWindow");
 const window_title = std.unicode.utf8ToUtf16LeStringLiteral("Firefox Password View");
@@ -368,9 +369,11 @@ fn buildProfileMenu(app: *App, menu: w.HMENU) void {
 
     for (app.profiles, 0..) |p, i| {
         if (i > ids.IDM_PROFILE_LAST - ids.IDM_PROFILE_FIRST) break;
+        // core/src/profiles.zig caps neither the Name= value nor the resolved
+        // path, so this label is the one conversion in the file that a
+        // profiles.ini can overrun.
         var label: [512]u16 = undefined;
-        const n = std.unicode.utf8ToUtf16Le(label[0 .. label.len - 1], menuLabel(p)) catch continue;
-        label[n] = 0;
+        _ = text_mod.wideZ(&label, menuLabel(p));
 
         var item: w.MENUITEMINFOW = .{
             .cbSize = @sizeOf(w.MENUITEMINFOW),
@@ -546,9 +549,7 @@ fn fillRow(app: *App, info: *w.NMLVDISPINFOW) void {
                 info.item.pszText = @constCast(masked.ptr);
                 return;
             }
-            const text = app.model.passwordText(row);
-            const n = std.unicode.utf8ToUtf16Le(app.row_buf[0 .. app.row_buf.len - 1], text) catch 0;
-            app.row_buf[n] = 0;
+            _ = text_mod.wideZ(&app.row_buf, app.model.passwordText(row));
             info.item.pszText = @ptrCast(&app.row_buf);
         },
         else => {},
@@ -694,22 +695,19 @@ fn showStatus(app: *App) void {
     const status = app.status orelse return;
 
     var message: [512]u16 = undefined;
-    const n = std.unicode.utf8ToUtf16Le(message[0 .. message.len - 1], app.model.status()) catch 0;
-    message[n] = 0;
+    _ = text_mod.wideZ(&message, app.model.status());
     _ = w.SendMessageW(status, w.SB_SETTEXTW, 0, @bitCast(@intFromPtr(&message)));
 
     var count_utf8: [64]u8 = undefined;
     const text = std.fmt.bufPrint(&count_utf8, "{d} shown", .{app.model.rowCount()}) catch "";
     var count: [64]u16 = undefined;
-    const m = std.unicode.utf8ToUtf16Le(count[0 .. count.len - 1], text) catch 0;
-    count[m] = 0;
+    _ = text_mod.wideZ(&count, text);
     _ = w.SendMessageW(status, w.SB_SETTEXTW, 1, @bitCast(@intFromPtr(&count)));
 }
 
 fn confirm(hwnd: w.HWND, prompt: []const u8) bool {
     var text: [512]u16 = undefined;
-    const n = std.unicode.utf8ToUtf16Le(text[0 .. text.len - 1], prompt) catch return false;
-    text[n] = 0;
+    _ = text_mod.wideZ(&text, prompt);
     const answer = w.MessageBoxW(
         hwnd,
         @ptrCast(&text),
@@ -733,8 +731,7 @@ fn showAbout(hwnd: w.HWND) void {
 
 fn reportFatal(message: []const u8) void {
     var text: [512]u16 = undefined;
-    const n = std.unicode.utf8ToUtf16Le(text[0 .. text.len - 1], message) catch 0;
-    text[n] = 0;
+    _ = text_mod.wideZ(&text, message);
     _ = w.MessageBoxW(null, @ptrCast(&text), window_title, w.MB_OK | w.MB_ICONERROR);
 }
 
@@ -796,8 +793,7 @@ fn submitPassword(app: *App, hdlg: w.HWND) void {
     }
 
     var error_text: [256]u16 = undefined;
-    const m = std.unicode.utf8ToUtf16Le(error_text[0 .. error_text.len - 1], app.model.status()) catch 0;
-    error_text[m] = 0;
+    _ = text_mod.wideZ(&error_text, app.model.status());
     _ = w.SetDlgItemTextW(hdlg, ids.IDC_PW_ERROR, @ptrCast(&error_text));
     _ = w.SetWindowTextW(edit, std.unicode.utf8ToUtf16LeStringLiteral(""));
     _ = w.SetFocus(edit);

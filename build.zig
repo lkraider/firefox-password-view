@@ -151,6 +151,15 @@ pub fn build(b: *std.Build) void {
     }) });
     test_step.dependOn(&b.addRunArtifact(ids_tests).step);
 
+    // win/src/text.zig imports std alone, so its cut-at-a-codepoint tests run
+    // on the host that builds the exe.
+    const text_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("win/src/text.zig"),
+        .target = target,
+        .optimize = optimize,
+    }) });
+    test_step.dependOn(&b.addRunArtifact(text_tests).step);
+
     // The Win32 front end. It imports `core` directly, the way tui does. No
     // C ABI, no FFI, no libc.
     const win_mod = b.createModule(.{
