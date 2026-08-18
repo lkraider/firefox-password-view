@@ -234,6 +234,8 @@ pub const WM_COMMAND: UINT = 0x0111;
 pub const WM_TIMER: UINT = 0x0113;
 pub const WM_NOTIFY: UINT = 0x004E;
 pub const WM_DPICHANGED: UINT = 0x02E0;
+/// The EDIT control copies its own selection to the clipboard for this.
+pub const WM_COPY: UINT = 0x0301;
 pub const WM_USER: UINT = 0x0400;
 
 pub const EN_CHANGE: WORD = 0x0300;
@@ -363,6 +365,7 @@ pub extern "user32" fn GetClientRect(HWND, *RECT) callconv(.winapi) BOOL;
 pub extern "user32" fn MoveWindow(HWND, c_int, c_int, c_int, c_int, BOOL) callconv(.winapi) BOOL;
 pub extern "user32" fn SetWindowPos(HWND, ?HWND, c_int, c_int, c_int, c_int, UINT) callconv(.winapi) BOOL;
 pub extern "user32" fn SetFocus(?HWND) callconv(.winapi) ?HWND;
+pub extern "user32" fn GetFocus() callconv(.winapi) ?HWND;
 pub extern "user32" fn GetWindowTextW(HWND, [*]WCHAR, c_int) callconv(.winapi) c_int;
 pub extern "user32" fn GetWindowTextLengthW(HWND) callconv(.winapi) c_int;
 pub extern "user32" fn SetWindowTextW(HWND, LPCWSTR) callconv(.winapi) BOOL;

@@ -519,7 +519,20 @@ fn onCommand(app: *App, hwnd: w.HWND, wparam: w.WPARAM) w.LRESULT {
             showStatus(app);
         },
         ids.IDM_ROW_REVEAL => toggleSelected(app, hwnd),
-        ids.IDM_ROW_COPY => copySelected(app, hwnd),
+        // app.rc binds Ctrl+C to IDM_ROW_COPY, and TranslateAcceleratorW
+        // matches whatever control holds the focus. WM_SETFOCUS puts the
+        // caret in the search box at startup, so Ctrl+C over a selected
+        // search term used to put the row's password on the clipboard.
+        // commandCode reads the HIWORD of wParam: 1 for an accelerator and 0
+        // for a menu item. The row context menu therefore still copies while
+        // the search box holds the focus.
+        ids.IDM_ROW_COPY => {
+            if (w.commandCode(wparam) == 1 and app.search != null and
+                w.GetFocus() == app.search)
+            {
+                _ = w.SendMessageW(app.search.?, w.WM_COPY, 0, 0);
+            } else copySelected(app, hwnd);
+        },
         ids.IDM_FILE_EXIT => _ = w.DestroyWindow(hwnd),
         ids.IDM_HELP_ABOUT => showAbout(hwnd),
         else => {},
