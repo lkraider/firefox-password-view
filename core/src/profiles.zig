@@ -130,6 +130,11 @@ pub fn enumerate(gpa: std.mem.Allocator, firefox_dir: []const u8, ini: []const u
     return profiles.toOwnedSlice(gpa);
 }
 
+/// `resolveDefault` and `enumerate` join through `std.fs.path.join`, which
+/// writes the host's separator. The tail of each expectation below keeps the
+/// forward slashes profiles.ini itself carries.
+const sep = std.fs.path.sep_str;
+
 test "install section wins over the legacy Default flag" {
     const ini =
         \\[Profile1]
@@ -149,7 +154,7 @@ test "install section wins over the legacy Default flag" {
     ;
     const got = try resolveDefault(std.testing.allocator, "/ff", ini);
     defer std.testing.allocator.free(got);
-    try std.testing.expectEqualStrings("/ff/Profiles/real.default-release", got);
+    try std.testing.expectEqualStrings("/ff" ++ sep ++ "Profiles/real.default-release", got);
 }
 
 test "falls back to Default=1 when no install section exists" {
@@ -160,7 +165,7 @@ test "falls back to Default=1 when no install section exists" {
     ;
     const got = try resolveDefault(std.testing.allocator, "/ff", ini);
     defer std.testing.allocator.free(got);
-    try std.testing.expectEqualStrings("/ff/Profiles/only.default", got);
+    try std.testing.expectEqualStrings("/ff" ++ sep ++ "Profiles/only.default", got);
 }
 
 test "enumerate lists every Profile section, including one Default does not pick" {
@@ -191,9 +196,9 @@ test "enumerate lists every Profile section, including one Default does not pick
 
     try std.testing.expectEqual(@as(usize, 2), got.len);
     try std.testing.expectEqualStrings("default", got[0].name);
-    try std.testing.expectEqualStrings("/ff/Profiles/abandoned.default", got[0].path);
+    try std.testing.expectEqualStrings("/ff" ++ sep ++ "Profiles/abandoned.default", got[0].path);
     try std.testing.expectEqualStrings("default-release", got[1].name);
-    try std.testing.expectEqualStrings("/ff/Profiles/real.default-release", got[1].path);
+    try std.testing.expectEqualStrings("/ff" ++ sep ++ "Profiles/real.default-release", got[1].path);
 }
 
 test "enumerate returns an empty slice for an ini with no Profile sections" {

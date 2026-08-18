@@ -525,7 +525,12 @@ test "openFirst skips the profile with no key4.db" {
 
     // Profile0 in this ini is `abandoned.default`, an empty directory.
     const picked = m.openFirst(list).?;
-    try testing.expectEqualStrings(firefox_dir ++ "/Profiles/real.default-release", list[picked].path);
+    // profiles.enumerate joins through std.fs.path.join, which writes the
+    // host's separator.
+    try testing.expectEqualStrings(
+        firefox_dir ++ std.fs.path.sep_str ++ "Profiles/real.default-release",
+        list[picked].path,
+    );
     try testing.expectEqual(@as(usize, 3), m.rowCount());
 }
 

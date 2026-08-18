@@ -237,7 +237,12 @@ test "two-profiles resolves to the profile the install section names" {
 
     const profile = try profiles.resolveDefault(testing.allocator, firefox_dir, ini);
     defer testing.allocator.free(profile);
-    try testing.expectEqualStrings(firefox_dir ++ "/Profiles/real.default-release", profile);
+    // profiles.resolveDefault joins through std.fs.path.join, which writes the
+    // host's separator.
+    try testing.expectEqualStrings(
+        firefox_dir ++ std.fs.path.sep_str ++ "Profiles/real.default-release",
+        profile,
+    );
 
     const key4 = try std.fmt.allocPrint(testing.allocator, "{s}/key4.db", .{profile});
     defer testing.allocator.free(key4);
