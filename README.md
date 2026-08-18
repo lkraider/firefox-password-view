@@ -3,8 +3,9 @@
 [![CI](https://github.com/lkraider/firefox-password-view/actions/workflows/ci.yml/badge.svg)](https://github.com/lkraider/firefox-password-view/actions/workflows/ci.yml)
 
 A terminal UI, a macOS app and a Windows app show the saved logins in a
-local Firefox profile. All three link one Zig core. The released binaries are
-Apple Silicon macOS, Windows x86_64 and Windows ARM64.
+local Firefox profile. All three read them through one Zig core. The
+released binaries are Apple Silicon macOS, Windows x86_64 and Windows
+ARM64.
 
 ### TUI
 
@@ -17,11 +18,6 @@ Apple Silicon macOS, Windows x86_64 and Windows ARM64.
 ### Win32
 
 ![The Windows app listing the same five logins in a report-view list, with the second row selected and its password revealed, and the status bar showing the login count](docs/images/windows-app.png)
-
-The Windows app shows the same list in a `SysListView32`. A `Profile` menu
-switches profiles, right-click offers Reveal and Copy, and the status bar
-shows the message and the row count. The image comes from a wine run, so
-the control theme is wine's own.
 
 ## Installing
 
@@ -76,15 +72,14 @@ found, and `--profile <path>` opens one directory.
 | right-click | Reveal and Copy for the row under the cursor. |
 
 Passwords stay masked until you press `enter`, and only the selected one is
-shown. The macOS app shows the same data under the same rules. Each row
-there carries a copy button that leaves the row masked, and a revealed
-password masks itself again after 30 seconds.
+shown. The macOS app shows the same data under the same rules, and each row
+there carries a copy button that leaves the row masked.
 
 ## Limits
 
 This reads a profile and writes nothing back. `core/src/sqlitedb.zig` opens
-`key4.db` read-only and reads the SQLite file format directly, so it is safe
-to run while Firefox has the profile open.
+`key4.db` read-only and reads the SQLite file format directly, so it runs
+while Firefox has the profile open.
 
 It cannot read these profiles:
 
@@ -93,9 +88,9 @@ It cannot read these profiles:
 - One that Firefox 144 or newer has never opened. Those hold
   3DES-encrypted entries only. This tool reports 3DES per entry and stops
   there.
-- One whose `key4.db` uses a WAL journal. NSS writes a rollback journal, and
-  every profile measured reports write version 1. The reader reports
-  `WalJournal` if that ever changes.
+- One whose `key4.db` uses a WAL journal. Every measured profile reports
+  write version 1, the rollback journal. The reader returns `WalJournal`
+  for write version 2.
 
 ## Security
 
@@ -106,21 +101,15 @@ On Windows it sets `ExcludeClipboardContentFromMonitorProcessing`,
 `Win+V` history and out of the cloud clipboard. Copying never puts the
 password on screen. There are no network calls and no telemetry.
 
-The macOS app and the Windows app share one 30-second rule:
+The macOS app and the Windows app clear the clipboard 30 seconds after a
+copy. Both mask a revealed password after the same 30 seconds. Each one
+records the clipboard's serial number when it copies. It clears only while
+that number still matches, so a copy someone else made in between
+survives.
 
-| After 30 seconds | macOS app | Windows app | TUI |
-|---|---|---|---|
-| A copied password leaves the clipboard | yes | yes | stays |
-| A revealed password masks itself | yes | yes | stays |
-
-Each app records the clipboard's change count when it copies, and clears
-only while that number still matches. A copy someone else made in the
-meantime survives. macOS reads `NSPasteboard.changeCount` and Windows
-reads `GetClipboardSequenceNumber`.
-
-The TUI writes through OSC 52 and `pbcopy`. The password stays on the
-clipboard until something else replaces it, and a revealed row stays open
-until you press `enter` again.
+The TUI writes through OSC 52 and `pbcopy`, and it runs no timer. The
+password stays on the clipboard until something else replaces it. A
+revealed row stays open until you press `enter` again.
 
 Anyone who can read your files or your memory already has this data.
 `key4.db` is readable by your own user, and Firefox exposes the same
@@ -129,8 +118,8 @@ wipes the buffers it owns.
 
 A profile synced to a Mozilla Account holds a `chrome://FirefoxAccounts`
 row. Its password is sync key material, so revealing it hands over the
-whole account. Both front ends mark that row and ask a second time before
-revealing it.
+whole account. All three front ends mark that row and ask a second time
+before revealing it.
 
 ## Building
 
@@ -157,19 +146,17 @@ zig build win -Dtarget=aarch64-windows-gnu -Doptimize=ReleaseSafe
 zig build win -Dtarget=x86_64-windows-gnu  -Doptimize=ReleaseSafe
 ```
 
-`ReleaseSafe` is the mode the released zips ship. It keeps the bounds and
+The released zips carry `ReleaseSafe`. That mode keeps the bounds and
 alignment checks that guard the hand-written `key4.db` reader.
 
-`python3 scripts/make-ico.py` regenerates `win/icon.ico` from the committed
-macOS artwork. The `.ico` is committed, so a build needs neither that script
-nor macOS.
+`win/icon.ico` is committed, and a build reads that file. `python3
+scripts/make-ico.py` rewrites it from `macos/Icon.icns`.
 
 The macOS app is a separate Swift package. See
 [`macos/README.md`](macos/README.md) for how to build and test it.
 
 `scripts/screenshots.sh` regenerates the three images above. Its `win`
-target needs wine on the Mac that runs it, and `FFPW_WINE` points at another
-build.
+target needs wine.
 
 ## Layout
 

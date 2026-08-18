@@ -21,10 +21,10 @@ path. The measurements come from a live Firefox 152.0.6 profile on macOS
 file filters on CKA_ID `f8000000000000000000000000000001` and object class
 `a0 = 00 00 00 04`.
 
-`core/src/sqlitedb.zig` reads the SQLite file format directly, so no SQL
-runs. It maps `a0`, `a11` and `a102` to record positions through the
-`CREATE TABLE` text, because `nssPrivate` declares 192 columns in one
-profile and 193 in another.
+`core/src/sqlitedb.zig` reads the SQLite file format directly. It maps
+`a0`, `a11` and `a102` to record positions through the `CREATE TABLE`
+text, because the column count moves: `nssPrivate` declares 192 columns in
+the `unmigrated` fixture and 193 in every other one.
 
 ### Two master keys, one key id
 
@@ -123,9 +123,10 @@ confirms the Primary Password before any key material is unwrapped.
 | 3DES | Not implemented. `sdr.decrypt` returns `LegacyTripleDes` | A DES implementation adds roughly 300 lines of legacy cipher that 0 of 1701 entries need |
 | DER | Own bounds-checked reader | `std.crypto.Certificate.der` has no bounds checks, no canonical-form checks and no tests (ziglang/zig#19775) |
 | C interop | `b.addTranslateC` | `@cImport` is deprecated in Zig 0.16 |
-| SQLite | `core/src/sqlitedb.zig`, a 418-line read-only reader for the file format | The vendored amalgamation is 262899 lines and puts an 803840-byte exe on Windows against a 4608-byte no-libc baseline. It also carries a version-bump obligation for CVEs that never reach a fixed SQL statement |
+| SQLite | `core/src/sqlitedb.zig`, a read-only reader for the file format | The vendored amalgamation needs libc. Three exes at `-Doptimize=ReleaseSmall` on `x86_64-windows-gnu`: 803840 bytes with the amalgamation, 64000 for a minimal one linking libc, 4608 for a minimal one without it. SQLite's CVE advisories also cover a SQL layer this reader never calls |
 | Win32 | Hand-written externs in `win/src/win32.zig` | `zigwin32` is a generated source tree of about 300 MB |
 | Windows UI | Windows mechanisms for every macOS feature: a `Profile` menu, a context menu, `MessageBoxW`, a `DIALOGEX` template | Porting a SwiftUI layout puts macOS interactions in a Windows app |
+| Windows optimize mode | `ReleaseSafe` for both released zips | `ReleaseSmall` saves 81 KB in the zip and drops the bounds, alignment and overflow checks. `sqlitedb.zig` takes every offset it follows from the file it reads |
 | Zig | Pin 0.16.0 | Tracking master breaks on each stdlib redesign |
 | Reveal | Masked by default, reveal one entry, copy to clipboard | Printing every password fills terminal scrollback |
 | Architecture | Ship one `aarch64-macos` slice, plus `x86_64-windows` and `aarch64-windows` | A macOS universal binary adds a lipo step and a second build for an architecture no release targets |
@@ -160,10 +161,11 @@ macos/          the SwiftUI app, a Swift package linking core.zig's static libra
 win/src/        the Win32 app, importing the core module directly
 ```
 
-`win/src/` splits the same way the macOS app does. `model.zig` holds every
-rule and calls no Win32 function, so `zig build test` runs its tests on the
-build host. `main.zig` owns the window, the timers and the dialogs.
-`win32.zig` holds the externs and `clipboard.zig` the clipboard writer.
+Inside `win/src/`, `model.zig` holds every rule about what a row shows and
+what an activation means. It imports `core` and `std` alone, so `zig build
+test` runs its tests on the build host. `main.zig` owns the window, the
+timers and the dialogs. `win32.zig` holds the externs and `clipboard.zig`
+the clipboard writer.
 
 ## Linking the core from another front end
 
@@ -200,10 +202,11 @@ from another host stays out of reach.
 
 Nothing else links a C library. `zig build -Dtarget=x86_64-windows-gnu`,
 `-Dtarget=aarch64-windows-gnu` and `-Dtarget=x86_64-linux-musl` all run on
-this Mac. Zig bundles a `.def` file for `user32`, `comctl32`, `gdi32`,
-`kernel32`, `dwmapi`, `uxtheme` and `advapi32` under
-`lib/libc/mingw/lib-common/`, and it generates each import library from that
-file, so the Win32 link needs no Windows SDK.
+this Mac. `build.zig` names `user32`, `comctl32`, `gdi32`, `dwmapi`,
+`uxtheme` and `advapi32`, and Zig links `kernel32` for every Windows
+target. Zig bundles a `.def` file for each one under
+`lib/libc/mingw/lib-common/` and generates the import library from it, so
+the Win32 link needs no Windows SDK.
 
 Zig ships no `windows.h`. `win/app.rc` therefore defines every constant it
 uses. Measured: without those defines the compile fails with
@@ -212,9 +215,37 @@ gives the `Profile` popup one separator, because resinator rejects an empty
 block with `empty menu of type 'POPUP' not allowed`, and
 `buildProfileMenu` deletes that separator after it inserts the profiles.
 
+Win32 hands out pointers that miss their natural alignment, and
+`@ptrFromInt` checks alignment in Debug and in ReleaseSafe. These casts
+carry `align(1)`:
+
+- `win32.zig` declares `LPCWSTR` as `[*:0]align(1) const WCHAR`, because
+  `intResource` turns a resource id into a pointer and `IDI_APP` is 1.
+  Windows reads a pointer whose high word is zero as an id in the low word.
+- `onNotify` reads `NMHDR` through an `align(1)` pointer, because
+  commctrl.h declares `NMLVKEYDOWN` inside `pshpack1.h`. Measured: an arrow
+  key in the list delivered `lparam = 0x11125aa`, 2 bytes off an 8-byte
+  boundary. `NMHDR`'s three fields sit at offsets 0, 8 and 16 in the packed
+  layout and in the unpacked one.
+
+The message loop calls `IsDialogMessageW`, so Tab moves the focus between
+the search box and the list. Both carry `WS_TABSTOP`. The call runs after
+`TranslateAcceleratorW`, so the accelerator table keeps Enter and Escape.
+`WM_SETFOCUS` on the frame hands the focus to the search box. That covers
+the launch and a click on the frame.
+
+The `x86_64-windows-gnu` exe runs under wine on macOS, and
+`scripts/screenshots.sh win` drives it there. Measured under wine 11.15:
+the profile list, the search filter, reveal, copy, the 30-second clipboard
+clear, the 30-second re-mask, the account-row confirmation, the context
+menu, the `Profile` menu, the Primary Password dialog and the failure
+message box. Option+P under wine typed a literal `p` into the search box,
+so the menu mnemonics still need a Windows machine.
+
 macOS App Sandbox needs a per-run open panel before it allows reading
-another app's data directory. Outside the sandbox, `~/Library/Application
-Support` is not TCC-protected, so no permission prompt appears.
+another app's data directory. TCC leaves `~/Library/Application Support`
+open to any process outside the sandbox, so the app reads a profile with
+no permission prompt.
 
 ## Known limitations
 
@@ -228,7 +259,7 @@ Support` is not TCC-protected, so no permission prompt appears.
   appeared. A read landing mid-write with a WAL file present is
   untested. Reaching that state needs a write to a live profile.
   `sqlitedb.zig` reads the write version at header offset 18 and returns
-  `error.WalJournal` for a value of 2. All six measured files report 1.
+  `error.WalJournal` for a value of 2. Every committed `key4.db` reports 1.
 - `zig build test --fuzz` does not run on the pinned Zig 0.16.0. Zig's
   bundled `test_runner.zig` passes a `*builtin.StackTrace` to
   `std.debug.writeStackTrace`, whose signature now wants
