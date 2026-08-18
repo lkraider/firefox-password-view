@@ -75,33 +75,10 @@ if ! osascript -e 'tell application "System Events" to count processes' >/dev/nu
 fi
 
 # --- window id helper ------------------------------------------------------
-# CGWindowListCopyWindowInfo has no CLI. JXA's ObjC bridge does not resolve
-# its signature, so this compiles a Swift one-shot into the work dir.
+# scripts/wine-check.sh compiles the same file. See its header for what the
+# columns hold.
 
-cat > "$work/winid.swift" <<'SWIFT'
-import CoreGraphics
-import Foundation
-
-// "<windowNumber>\t<ownerPID>\t<ownerName>\t<windowName>\t<x>\t<y>\t<w>\t<h>"
-// The four bounds fields are screen points with a top-left origin, the same
-// coordinates System Events and CGEvent take.
-let opts: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-guard let list = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else {
-    exit(1)
-}
-for w in list {
-    let num = w[kCGWindowNumber as String] as? Int ?? -1
-    let pid = w[kCGWindowOwnerPID as String] as? Int ?? -1
-    let owner = w[kCGWindowOwnerName as String] as? String ?? ""
-    let name = w[kCGWindowName as String] as? String ?? ""
-    var r = CGRect.zero
-    if let b = w[kCGWindowBounds as String] as? [String: Any] {
-        r = CGRect(dictionaryRepresentation: b as CFDictionary) ?? .zero
-    }
-    print("\(num)\t\(pid)\t\(owner)\t\(name)\t\(Int(r.minX))\t\(Int(r.minY))\t\(Int(r.width))\t\(Int(r.height))")
-}
-SWIFT
-swiftc -O -o "$work/winid" "$work/winid.swift"
+swiftc -O -o "$work/winid" "$repo_root/scripts/winid.swift"
 
 # window_id_for_pid <pid> -> window number on stdout, empty when absent
 window_id_for_pid() {
@@ -182,38 +159,11 @@ print("trimmed \(cut) rows")
 SWIFT
 swiftc -O -o "$work/trimtop" "$work/trimtop.swift"
 
-# --- window drag -----------------------------------------------------------
+# --- mouse helper ----------------------------------------------------------
 # shoot_win pulls the bottom edge up, so the image ends near the last row.
-# System Events posts keystrokes and leaves "click at" unposted for wine, so
-# this posts the mouse events through CGEvent.
+# scripts/wine-check.sh compiles the same file for its right-clicks.
 
-cat > "$work/dragto.swift" <<'SWIFT'
-import CoreGraphics
-import Foundation
-
-// dragto <x1> <y1> <x2> <y2>
-let a = CommandLine.arguments.dropFirst().map { Double($0)! }
-let from = CGPoint(x: a[0], y: a[1])
-let to = CGPoint(x: a[2], y: a[3])
-
-func post(_ type: CGEventType, _ p: CGPoint) {
-    CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: .left)?
-        .post(tap: .cghidEventTap)
-    usleep(60_000)
-}
-
-post(.mouseMoved, from)
-post(.leftMouseDown, from)
-// AppKit reads the edge under the cursor on the first drag event, so the
-// path runs in steps rather than one jump.
-for i in 1...8 {
-    let t = Double(i) / 8.0
-    post(.leftMouseDragged, CGPoint(x: from.x + (to.x - from.x) * t,
-                                    y: from.y + (to.y - from.y) * t))
-}
-post(.leftMouseUp, to)
-SWIFT
-swiftc -O -o "$work/dragto" "$work/dragto.swift"
+swiftc -O -o "$work/macinput" "$repo_root/scripts/macinput.swift"
 
 # --- sandbox profile -------------------------------------------------------
 
@@ -399,8 +349,8 @@ INI
     # that empty, so the bottom edge comes up to $win_height points first.
     set -- $(window_bounds_for_pid "$pid")
     [ $# -eq 4 ] || { echo "no bounds for pid $pid" >&2; exit 1; }
-    "$work/dragto" "$(($1 + $3 - 2))" "$(($2 + $4 - 2))" \
-                   "$(($1 + $3 - 2))" "$(($2 + win_height))"
+    "$work/macinput" drag "$(($1 + $3 - 2))" "$(($2 + $4 - 2))" \
+                          "$(($1 + $3 - 2))" "$(($2 + win_height))"
     sleep 1
 
     # tab            leave the search box for the list
