@@ -13,14 +13,17 @@ Usage:
     tools/mkfixtures.py migrate     --profile core/testdata/migrated/profile
     tools/mkfixtures.py overflow
     tools/mkfixtures.py fanout
+    tools/mkfixtures.py page64k
+    tools/mkfixtures.py reserved
 
 The first four subcommands launch Firefox, drive it, and quit it. Firefox
 must be fully closed before the caller reads key4.db or logins.json, so this
 script always waits for the child process to exit.
 
-The `overflow` subcommand runs no Firefox. It writes one database through
-Python's own sqlite3. The `fanout` subcommand runs neither, and assembles its
-pages byte by byte. See core/testdata/README.md.
+The `overflow` and `page64k` subcommands run no Firefox. Each writes one
+database through Python's own sqlite3. The `fanout` and `reserved` subcommands
+run neither, and assemble their pages byte by byte. See
+core/testdata/README.md.
 """
 
 import argparse
@@ -377,6 +380,146 @@ def cmd_overflow(args):
     con.close()
 
 
+# The 64 KB page fixture. Header offset 16 is two bytes wide, so SQLite stores
+# a 65536-byte page as 1 and sqlitedb.Db.open maps that value back. Every
+# key4.db uses 32768 bytes and never reaches the mapping.
+PAGE64K_SIZE = 65536
+# usable is 65536, so max_local is 65501 and min_local is 8199. A 70000-byte
+# blob gives a 70005-byte record: k is 70005, past max_local, so local falls
+# back to min_local. A 75000-byte blob gives 75005, k is 9473, and local takes
+# k. Each row spills onto one overflow page.
+PAGE64K_BLOBS = (70000, 75000)
+
+
+def cmd_page64k(args):
+    """Writes one database with a 65536-byte page.
+
+    Python's sqlite3 writes the file, so the bytes come from SQLite. Each
+    blob's content derives from its byte position, so two runs write the same
+    bytes.
+    """
+    if os.path.exists(args.page64k_out):
+        os.remove(args.page64k_out)
+
+    con = sqlite3.connect(args.page64k_out)
+    con.execute(f"PRAGMA page_size = {PAGE64K_SIZE}")
+    con.execute("PRAGMA journal_mode = delete")
+    con.execute("CREATE TABLE wide (id INTEGER PRIMARY KEY, body BLOB)")
+    for size in PAGE64K_BLOBS:
+        con.execute("INSERT INTO wide (body) VALUES (?)", (payload_bytes(size),))
+    con.commit()
+    con.close()
+
+
+def payload_bytes(size):
+    """Content that names its own byte position.
+
+    A reader that takes the wrong number of local bytes returns a shifted copy
+    of this, and a byte-for-byte comparison reports it.
+    """
+    return bytes((i * 7) % 251 for i in range(size))
+
+
+# The reserved-bytes fixture. Header offset 20 reserves a tail on every page
+# for an extension such as SEE, and sqlitedb's payload arithmetic counts
+# page_size minus that tail. Firefox loads no extension, so every key4.db
+# stores 0 there and no fixture sqlite3 writes can separate the two fields.
+# cmd_reserved below assembles the file byte by byte.
+RESERVED_PAGE_SIZE = 512
+RESERVED_TAIL = 16
+# usable is 496, so max_local is 461 and min_local is 37. A 600-byte record
+# gives k = 108, so 108 bytes sit in the cell and 492 on one overflow page.
+# Reading the same file with page_size in place of usable takes 92 local bytes.
+RESERVED_RECORD = 600
+RESERVED_SQL = b"CREATE TABLE wide(id INTEGER PRIMARY KEY, body BLOB)"
+
+
+def reserved_file_header(page_count):
+    """The 100-byte header at offset 0, with a non-zero reserved field."""
+    h = bytearray(100)
+    h[0:16] = b"SQLite format 3\x00"
+    h[16:18] = struct.pack(">H", RESERVED_PAGE_SIZE)
+    h[18] = 1  # write version 1, so the reader does not report WalJournal
+    h[19] = 1
+    h[20] = RESERVED_TAIL
+    h[21] = 64
+    h[22] = 32
+    h[23] = 32
+    h[24:28] = struct.pack(">I", 1)
+    h[28:32] = struct.pack(">I", page_count)
+    h[44:48] = struct.pack(">I", 4)
+    h[56:60] = struct.pack(">I", 1)  # text encoding UTF-8
+    h[92:96] = struct.pack(">I", 1)
+    h[96:100] = struct.pack(">I", 3045000)
+    return bytes(h)
+
+
+def reserved_leaf_page(cell, base, page_count=None):
+    """One table leaf page holding `cell`, written into a full page.
+
+    `base` is 100 for page 1, which carries the file header ahead of its
+    b-tree header, and 0 for every other page. The cell ends where the
+    reserved tail starts, so no byte of the payload lands in the tail.
+    """
+    p = bytearray(RESERVED_PAGE_SIZE)
+    if base == 100:
+        p[0:100] = reserved_file_header(page_count)
+    start = RESERVED_PAGE_SIZE - RESERVED_TAIL - len(cell)
+    p[start:start + len(cell)] = cell
+    p[base] = 0x0D  # table leaf
+    p[base + 3:base + 5] = struct.pack(">H", 1)
+    p[base + 5:base + 7] = struct.pack(">H", start)
+    # The cell pointer array of a leaf starts 8 bytes into the b-tree header. A
+    # zero here sends the reader to a cell at offset 0.
+    p[base + 8:base + 10] = struct.pack(">H", start)
+    return bytes(p)
+
+
+def cmd_reserved(args):
+    """Writes one database whose pages reserve a 16-byte tail.
+
+    The record spans the cell's own page and one overflow page. Its content
+    derives from its byte position, so a reader that counts page_size where it
+    should count usable bytes returns different bytes.
+    """
+    usable = RESERVED_PAGE_SIZE - RESERVED_TAIL
+    max_local = usable - 35
+    min_local = ((usable - 12) * 32 // 255) - 23
+    k = min_local + (RESERVED_RECORD - min_local) % (usable - 4)
+    local = k if k <= max_local else min_local
+
+    # Serial type 0 for the rowid alias, 12 + 2n for a blob of n bytes. The
+    # blob fills what the record has left after its own header.
+    blob = RESERVED_RECORD - 4
+    record = bytes([4, 0]) + sqlite_varint(12 + 2 * blob) + payload_bytes(blob)
+    assert len(record) == RESERVED_RECORD, len(record)
+
+    # A table leaf cell: the payload size, the rowid, the local bytes, then the
+    # first overflow page number.
+    cell = (sqlite_varint(RESERVED_RECORD) + sqlite_varint(1) +
+            record[:local] + struct.pack(">I", 3))
+
+    master_payload = (
+        bytes([6, 13 + 2 * 5, 13 + 2 * 4, 13 + 2 * 4, 1, 13 + 2 * len(RESERVED_SQL)]) +
+        b"table" + b"wide" + b"wide" + bytes([2]) + RESERVED_SQL
+    )
+    master_cell = sqlite_varint(len(master_payload)) + sqlite_varint(1) + master_payload
+
+    # The overflow page: the next page number, then the rest of the record.
+    overflow = bytearray(RESERVED_PAGE_SIZE)
+    rest = record[local:]
+    assert len(rest) <= usable - 4, len(rest)
+    overflow[4:4 + len(rest)] = rest
+
+    pages = [
+        reserved_leaf_page(master_cell, 100, page_count=3),
+        reserved_leaf_page(cell, 0),
+        bytes(overflow),
+    ]
+    with open(args.reserved_out, "wb") as f:
+        f.write(b"".join(pages))
+
+
 # The fan-out fixture. sqlite3 refuses to write a b-tree that reaches one page
 # twice, so cmd_fanout below assembles every page byte by byte.
 FANOUT_PAGE_SIZE = 512
@@ -513,6 +656,10 @@ def main():
                         help="output path for the overflow fixture")
     parser.add_argument("--fanout-out", default="core/testdata/fanout.db",
                         help="output path for the fan-out fixture")
+    parser.add_argument("--page64k-out", default="core/testdata/page64k.db",
+                        help="output path for the 64 KB page fixture")
+    parser.add_argument("--reserved-out", default="core/testdata/reserved.db",
+                        help="output path for the reserved-bytes fixture")
     parser.add_argument("--port", type=int, default=MARIONETTE_PORT)
     sub = parser.add_subparsers(dest="fixture", required=True)
     sub.add_parser("fresh")
@@ -521,6 +668,8 @@ def main():
     sub.add_parser("migrate")
     sub.add_parser("overflow")
     sub.add_parser("fanout")
+    sub.add_parser("page64k")
+    sub.add_parser("reserved")
 
     args = parser.parse_args()
 
@@ -532,6 +681,16 @@ def main():
     if args.fixture == "fanout":
         cmd_fanout(args)
         print(f"wrote {args.fanout_out}")
+        return
+
+    if args.fixture == "page64k":
+        cmd_page64k(args)
+        print(f"wrote {args.page64k_out}")
+        return
+
+    if args.fixture == "reserved":
+        cmd_reserved(args)
+        print(f"wrote {args.reserved_out}")
         return
 
     if args.profile is None:

@@ -22,10 +22,17 @@ const fixtures = [_][]const u8{
     // to overflow pages and its b-tree grows an interior page. No key4.db
     // reaches either branch.
     "core/testdata/overflow.db",
+    // A 65536-byte page. SQLite stores that size as 1 in the two-byte field at
+    // header offset 16, and sqlitedb.Db.open maps it back.
+    "core/testdata/page64k.db",
+    // A 16-byte reserved tail on every page. The payload arithmetic counts 496
+    // usable bytes of each 512-byte page. Every other fixture reserves 0,
+    // where usable and page_size are equal.
+    "core/testdata/reserved.db",
 };
 
-/// The widest record in the overflow fixture is about 20 KB.
-const row_buf_len = 64 * 1024;
+/// The widest record is the 75005-byte one in the 64 KB page fixture.
+const row_buf_len = 128 * 1024;
 
 test "the reader returns what sqlite3 returns, for every column of every fixture" {
     var threaded: std.Io.Threaded = .init(testing.allocator, .{});

@@ -38,6 +38,27 @@ page budget in `RowIterator.push` stops it after 23 pushes and returns
 `error.Corrupt`. sqlite3 reports `database disk image is malformed` for this
 file, so `core/test/oracle.zig` leaves it out of its fixture list.
 
+`tools/mkfixtures.py page64k` writes `page64k.db` through Python's own
+`sqlite3` with `PRAGMA page_size = 65536`. Header offset 16 is two bytes wide,
+so SQLite stores that size as the value 1 and `sqlitedb.Db.open` maps it back.
+Every `key4.db` uses 32768 bytes and reaches neither the value nor the
+mapping. The file holds two rows against the two arms of the local-size
+choice: a 70005-byte record, where `k` runs past `max_local` and `local` falls
+back to `min_local`, and a 75005-byte one, where `local` takes `k`. Each row
+spills onto one overflow page. `core/test/oracle.zig` reads it, so
+`row_buf_len` there holds 128 KB.
+
+`tools/mkfixtures.py reserved` writes `reserved.db`. Python assembles its 3
+pages byte by byte. Header offset 20 reserves a tail on every page for an
+extension such as SEE, and the payload arithmetic in `readPayload` counts
+`page_size` minus that tail. Firefox loads no extension, so every `key4.db`
+stores 0 there, and 0 makes `usable` and `page_size` equal. This file reserves
+16 bytes of each 512-byte page, so `usable` is 496. Its one record totals 600
+bytes: 108 sit in the cell and 492 on one overflow page. A reader that counts
+`page_size` takes 92 local bytes and returns other content. The record's blob
+holds `(position * 7) % 251`, so `core/src/tests.zig` asserts every byte, and
+the system sqlite3 reads the file, so `core/test/oracle.zig` covers it too.
+
 Some fixtures carry hand-written parts. Every such edit stays outside the
 encrypted bytes, so the crypto in each fixture is still Firefox's own
 output.
@@ -67,11 +88,13 @@ python3 tools/mkfixtures.py --profile /tmp/scratch fresh
 cp /tmp/scratch/key4.db /tmp/scratch/logins.json core/testdata/fresh/
 ```
 
-Regenerate `overflow.db` and `fanout.db` in place with:
+Regenerate the bare databases in place with:
 
 ```
 python3 tools/mkfixtures.py overflow
 python3 tools/mkfixtures.py fanout
+python3 tools/mkfixtures.py page64k
+python3 tools/mkfixtures.py reserved
 ```
 
 `core/src/tests.zig` asserts each fixture's password-check decrypts under its

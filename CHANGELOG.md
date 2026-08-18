@@ -22,6 +22,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and through the system sqlite3, then compares every column, every rowid
   and the row order. `core/testdata/overflow.db` covers the overflow and
   interior-page branches no `key4.db` reaches.
+- `core/testdata/page64k.db` and `core/testdata/reserved.db` cover the two
+  header fields no `key4.db` exercises: a 65536-byte page, stored as the
+  value 1 at header offset 16, and a 16-byte reserved tail on every page.
+  The reserved fixture is the one test that separates `usable` from
+  `page_size` in the payload arithmetic.
 - `scripts/wine-check.sh` drives the Windows exe under wine and exits
   non-zero on a failure. It covers copy from the list, copy from the search
   box, copy from the row menu, the right-click selection, Tab, Escape and a
@@ -35,14 +40,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   job builds the app, launches it against the `fresh` fixture through
   `scripts/win-launch-check.ps1`, and asserts the process is alive and its
   own window class is up.
-
-### Fixed
-
-- The SQLite reader followed a b-tree that reaches one page many times
-  until the caller gave up. A crafted 11,776-byte `key4.db` made
-  `keydb.load` run over 20 seconds with no return. One walk now descends
-  into at most as many pages as the file holds, and that file returns
-  `error.QueryFailed` in 0.37 seconds. `core/testdata/fanout.db` covers it.
 
 ### Changed
 
@@ -58,6 +55,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The SQLite reader followed a b-tree that reaches one page many times
+  until the caller gave up. A crafted 11,776-byte `key4.db` made
+  `keydb.load` run over 20 seconds with no return. One walk now descends
+  into at most as many pages as the file holds, and that file returns
+  `error.QueryFailed` in 0.37 seconds. `core/testdata/fanout.db` covers it.
 - Windows app: a profile whose `profiles.ini` name runs past 511 characters
   made the app exit with no window and no message. The conversion to UTF-16
   panicked, and the windows subsystem sends a panic to a stderr with no

@@ -407,6 +407,34 @@ test "the fan-out fixture stops the walk at the page budget" {
     try testing.expectError(error.Corrupt, drainRows(&it));
 }
 
+test "the reserved-bytes fixture returns the payload the tail excludes" {
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+
+    var db = try sqlitedb.Db.open(threaded.io(), "core/testdata/reserved.db");
+    defer db.close();
+
+    // Header offset 20 reserves 16 bytes of every 512-byte page, so the
+    // payload arithmetic counts 496 usable bytes. Reading the same file with
+    // page_size in place of usable takes 92 local bytes where this takes 108.
+    try testing.expectEqual(@as(u32, 512), db.page_size);
+    try testing.expectEqual(@as(u32, 496), db.usable);
+
+    var buf: [4096]u8 = undefined;
+    const table = try db.table("wide", &buf);
+    const body = try table.columnIndex("body");
+
+    var it = table.rows(&db, &buf);
+    const row = (try it.next()) orelse return error.NoRow;
+    const bytes = row.column(body) orelse return error.NoColumn;
+
+    // tools/mkfixtures.py fills the blob with (position * 7) % 251. The record
+    // totals 600 bytes and its own header takes 4, so 596 reach this column.
+    try testing.expectEqual(@as(usize, 596), bytes.len);
+    for (bytes, 0..) |b, i| try testing.expectEqual(@as(u8, @intCast((i * 7) % 251)), b);
+    try testing.expect((try it.next()) == null);
+}
+
 test "profiles.enumerate on two-profiles finds the one with no key4.db" {
     const profiles = @import("profiles.zig");
     const firefox_dir = "core/testdata/two-profiles";
