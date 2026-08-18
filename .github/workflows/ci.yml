@@ -17,10 +17,6 @@ jobs:
     # Swift 6. macos-14's default Xcode ships Swift 5.10.
     runs-on: macos-15
 
-    outputs:
-      win_x86_64: ${{ steps.cross.outputs.x86_64_windows_gnu }}
-      win_arm64: ${{ steps.cross.outputs.aarch64_windows_gnu }}
-
     steps:
       - uses: actions/checkout@v7
 
@@ -56,46 +52,6 @@ jobs:
         working-directory: macos
         run: ./scripts/bundle.sh
 
-      - name: Cross-compile every shipped target
-        id: cross
-        # ReleaseSafe matches scripts/package-release.sh, so this step compiles
-        # the same source with the same flags that script uses.
-        #
-        # The three targets build at once. Each gets its own cache directory and
-        # its own prefix, so no build reads another's artifacts and one output
-        # file per build holds its log. Two parallel builds and one sequential
-        # build of x86_64-windows-gnu produced the same sum on a development
-        # Mac, so the extra flags change no byte of the exe.
-        #
-        # Each Windows exe's sum goes in the run summary, beside the ones the
-        # two Windows jobs record. scripts/package-release.sh cross-compiles
-        # from this host with these flags, so a released zip holds these bytes.
-        run: |
-          targets="x86_64-windows-gnu aarch64-windows-gnu x86_64-linux-musl"
-          jobs=""
-          for target in $targets; do
-            ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build \
-              -Dtarget="$target" -Doptimize=ReleaseSafe \
-              --cache-dir ".zig-cache-$target" -p "out-$target" \
-              > "build-$target.log" 2>&1 &
-            jobs="$jobs $!:$target"
-          done
-
-          status=0
-          for job in $jobs; do
-            wait "${job%%:*}" || status=1
-            echo "--- ${job#*:}"
-            cat "build-${job#*:}.log"
-          done
-          [ "$status" -eq 0 ] || exit 1
-
-          for target in x86_64-windows-gnu aarch64-windows-gnu; do
-            sum=$(shasum -a 256 "out-$target/bin/FirefoxPasswordView.exe" | cut -d' ' -f1)
-            echo "sha256 $sum  $target  built on macOS ARM64"
-            echo "- \`$target\` built on \`macOS ARM64\`, the host that builds a release: \`$sum\`" \
-              >> "$GITHUB_STEP_SUMMARY"
-            echo "$(echo "$target" | tr - _)=$sum" >> "$GITHUB_OUTPUT"
-          done
 
   windows-test:
     # Runs the core tests and builds the app on the platform it ships for.
@@ -196,10 +152,11 @@ jobs:
         run: .\scripts\win-launch-check.ps1
 
   compare-sums:
-    # Asserts that every build host produced the same exe. The three jobs above
-    # publish one sum per target, and `needs` holds this job until each one has
-    # finished. Nothing here builds, so the runner that starts fastest runs it.
-    needs: [build-and-test, windows-test, windows-arm-test]
+    # Asserts that every build host produced the same exe. reproducible-build,
+    # windows-test and windows-arm-test each publish one sum per target they
+    # build, and `needs` holds this job until all three have finished. Nothing
+    # here builds, so the runner that starts fastest runs it.
+    needs: [reproducible-build, windows-test, windows-arm-test]
     runs-on: ubuntu-latest
 
     steps:
@@ -208,13 +165,13 @@ jobs:
       - name: x86_64-windows-gnu, from macos-15 and windows-latest
         run: >
           scripts/compare-sums.sh x86_64-windows-gnu
-          "macos-15=${{ needs.build-and-test.outputs.win_x86_64 }}"
+          "macos-15=${{ needs.reproducible-build.outputs.win_x86_64 }}"
           "windows-latest=${{ needs.windows-test.outputs.sum }}"
 
       - name: aarch64-windows-gnu, from macos-15 and windows-11-arm
         run: >
           scripts/compare-sums.sh aarch64-windows-gnu
-          "macos-15=${{ needs.build-and-test.outputs.win_arm64 }}"
+          "macos-15=${{ needs.reproducible-build.outputs.win_arm64 }}"
           "windows-11-arm=${{ needs.windows-arm-test.outputs.sum }}"
 
   reproducible-build:
@@ -223,6 +180,10 @@ jobs:
     # -gnone, or the tar/ditto flags in scripts/package-release.sh. Each
     # of those exists to keep this build byte-for-byte reproducible.
     runs-on: macos-15
+
+    outputs:
+      win_x86_64: ${{ steps.sums.outputs.x86_64 }}
+      win_arm64: ${{ steps.sums.outputs.arm64 }}
 
     steps:
       - uses: actions/checkout@v7
@@ -244,6 +205,20 @@ jobs:
 
       - name: Package once
         run: ./scripts/package-release.sh 0.0.0-repro-check dist1
+
+      # The exes the packaging step above put in the zips. compare-sums reads
+      # these through this job's outputs, and the clean below deletes the
+      # prefixes that hold them.
+      - name: Record each Windows exe's sum
+        id: sums
+        run: |
+          for arch in x86_64 arm64; do
+            sum=$(shasum -a 256 "out-$arch/bin/FirefoxPasswordView.exe" | cut -d' ' -f1)
+            echo "sha256 $sum  windows-$arch  built on macOS ARM64"
+            echo "- \`windows-$arch\` built on \`macOS ARM64\`, the host that builds a release: \`$sum\`" \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "$arch=$sum" >> "$GITHUB_OUTPUT"
+          done
 
       - name: Clean every build artifact
         # package-release.sh gives each Windows build its own cache and prefix.

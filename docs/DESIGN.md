@@ -415,9 +415,10 @@ no permission prompt.
   `-Dtarget=aarch64-windows-gnu`. `zig build test` runs on `windows-latest`
   and on `macos-15`. No machine runs the core tests compiled for arm64
   Windows.
-- Linux is deferred. The core builds for `x86_64-linux-musl` today. A
-  Linux TUI needs the profile directory (`~/.mozilla/firefox`) and a
-  clipboard call to replace `pbcopy`.
+- Linux is deferred. The core builds for `x86_64-linux-musl` on a
+  development Mac, and no CI job compiles that target. A Linux TUI needs the
+  profile directory (`~/.mozilla/firefox`) and a clipboard call to replace
+  `pbcopy`.
 - The Windows TUI is out of scope. `tui/src/main.zig` calls
   `std.process.Args.Iterator.init`, and that function is a compile error on
   Windows. `build.zig` installs `ffpw` only for a non-Windows target.
