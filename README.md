@@ -81,6 +81,11 @@ This reads a profile and writes nothing back. `core/src/sqlitedb.zig` opens
 `key4.db` read-only and reads the SQLite file format directly, so it runs
 while Firefox has the profile open.
 
+It reads `key4.db` and `logins.json` once at open and closes both. The list
+is a snapshot from that moment. A login Firefox saves later appears when
+you open the profile again: the `Profile` menu on Windows, the profile
+picker on macOS, a restart for the TUI.
+
 It cannot read these profiles:
 
 - One with a Primary Password you do not know. Decryption uses the
@@ -88,9 +93,10 @@ It cannot read these profiles:
 - One that Firefox 144 or newer has never opened. Those hold
   3DES-encrypted entries only. This tool reports 3DES per entry and stops
   there.
-- One whose `key4.db` uses a WAL journal. Every measured profile reports
-  write version 1, the rollback journal. The reader returns `WalJournal`
-  for write version 2.
+- One whose `key4.db` uses SQLite's write-ahead log. The file header names
+  the journal mode. Every profile measured names the rollback journal, and
+  the reader reads that format. A write-ahead log stops it with
+  `WalJournal`.
 
 ## Security
 
