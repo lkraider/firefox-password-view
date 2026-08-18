@@ -454,16 +454,18 @@ def reserved_file_header(page_count):
     return bytes(h)
 
 
-def reserved_leaf_page(cell, base, page_count=None):
+def reserved_leaf_page(cell, header=None):
     """One table leaf page holding `cell`, written into a full page.
 
-    `base` is 100 for page 1, which carries the file header ahead of its
-    b-tree header, and 0 for every other page. The cell ends where the
-    reserved tail starts, so no byte of the payload lands in the tail.
+    `header` is the 100-byte file header for page 1, and None for every other
+    page. Page 1 puts its b-tree header after that header. The cell ends where
+    the reserved tail starts, so no byte of the payload lands in the tail.
     """
     p = bytearray(RESERVED_PAGE_SIZE)
-    if base == 100:
-        p[0:100] = reserved_file_header(page_count)
+    base = 0
+    if header is not None:
+        p[0:100] = header
+        base = 100
     start = RESERVED_PAGE_SIZE - RESERVED_TAIL - len(cell)
     p[start:start + len(cell)] = cell
     p[base] = 0x0D  # table leaf
@@ -512,8 +514,8 @@ def cmd_reserved(args):
     overflow[4:4 + len(rest)] = rest
 
     pages = [
-        reserved_leaf_page(master_cell, 100, page_count=3),
-        reserved_leaf_page(cell, 0),
+        reserved_leaf_page(master_cell, reserved_file_header(3)),
+        reserved_leaf_page(cell),
         bytes(overflow),
     ]
     with open(args.reserved_out, "wb") as f:
@@ -525,8 +527,8 @@ def cmd_reserved(args):
 FANOUT_PAGE_SIZE = 512
 # A 512-byte interior page carries a 12-byte header and 5-byte cells. 71 cells
 # take 355 content bytes and 142 pointer bytes, and 12 + 355 + 142 is 509. A
-# 72nd cell overlaps the pointer array with the content area, and the reader
-# returns Corrupt for that instead of for the page budget.
+# 72nd cell overlaps the pointer array with the content area. The reader
+# returns Corrupt for that overlap, and this fixture tests the page budget.
 FANOUT_CELLS = 71
 # Each level multiplies the child count by 72. At 21 levels the walk reaches
 # 72**21 leaves through a 23-page file.
@@ -568,8 +570,9 @@ def fanout_file_header(page_count):
 def fanout_page1(page_count, root):
     """Page 1: the file header, then a sqlite_master leaf naming metaData.
 
-    keydb.load looks up `metaData`, so the walk this fixture triggers starts
-    from a real lookup rather than from a hand-built RowIterator.
+    keydb.load looks up `metaData`, so this fixture reaches the walk through
+    the same call path a key4.db reaches it through. A hand-built RowIterator
+    would skip Db.table.
     """
     sql = b"CREATE TABLE metaData(id,item1,item2)"
     # Serial types for the five sqlite_master columns: text 5, text 8, text 8,
@@ -587,7 +590,7 @@ def fanout_page1(page_count, root):
     body[5:7] = struct.pack(">H", 100 + start)
     # The cell pointer array of a leaf starts at page offset 8. A zero here
     # sends the reader to a cell at offset 0, and it returns Corrupt for that
-    # instead of for the page budget.
+    # cell. This fixture tests the page budget.
     body[8:10] = struct.pack(">H", 100 + start)
     return fanout_file_header(page_count) + bytes(body)
 

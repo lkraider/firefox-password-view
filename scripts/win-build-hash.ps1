@@ -25,11 +25,10 @@
 # the cpu to a baseline, so the target string decides the code generation and
 # the sum is comparable across build hosts.
 #
-# Each run appends its sum to the job summary. build-and-test appends the sums
-# of the exes it cross-compiles on macos-15, the host and the flags
-# scripts/package-release.sh uses for a release. One run page therefore holds
-# every host's answer for one source tree. Nothing compares them across hosts
-# yet, and docs/DESIGN.md's known limitations record why.
+# Each run appends its sum to the job summary and to GITHUB_OUTPUT.
+# reproducible-build appends the sums of the exes scripts/package-release.sh
+# put in the zips, and ci.yml's compare-sums job compares one sum per target
+# across every build host.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Zig,
@@ -52,8 +51,12 @@ function Start-Build($Build) {
         -RedirectStandardOutput $Build.log -RedirectStandardError "$($Build.log).err"
 }
 
+function Get-ExePath($Build) {
+    return Join-Path $Build.out "bin" "FirefoxPasswordView.exe"
+}
+
 function Get-Sum($Build) {
-    return (Get-FileHash -Algorithm SHA256 (Join-Path $Build.out "bin" "FirefoxPasswordView.exe")).Hash.ToLower()
+    return (Get-FileHash -Algorithm SHA256 (Get-ExePath $Build)).Hash.ToLower()
 }
 
 $builds = @([ordered]@{ name = "build 1"; cache = ".zig-cache-1"; out = "out-1"; log = "build-1.log" })
@@ -64,18 +67,20 @@ if ($Twice) {
 foreach ($b in $builds) { $b.proc = Start-Build $b }
 Write-Host "started $($builds.Count) build(s) of $Target"
 
+# Every process to wait on. $builds holds the ones that write an exe.
+$jobs = @($builds)
 if ($WithTests) {
     $tests = [ordered]@{ name = "zig build test"; log = "build-test.log" }
     $tests.proc = Start-Process -FilePath $Zig -NoNewWindow -PassThru `
         -ArgumentList @("build", "test", "-Doptimize=ReleaseSafe", "-Doracle=false") `
         -RedirectStandardOutput $tests.log -RedirectStandardError "$($tests.log).err"
     Write-Host "started zig build test beside them"
-    $builds += $tests
+    $jobs += $tests
 }
-Wait-Process -Id ($builds | ForEach-Object { $_.proc.Id })
+Wait-Process -Id ($jobs | ForEach-Object { $_.proc.Id })
 
 $failed = $false
-foreach ($b in $builds) {
+foreach ($b in $jobs) {
     foreach ($log in @($b.log, "$($b.log).err")) {
         if ((Test-Path $log) -and (Get-Item $log).Length -gt 0) { Get-Content $log }
     }
@@ -86,17 +91,14 @@ foreach ($b in $builds) {
 }
 if ($failed) { exit 1 }
 
-# @() keeps one match an array. Where-Object returns the object itself for a
-# single match, and $exes[0] on an ordered dictionary looks up the key 0.
-$exes = @($builds | Where-Object { $_.out })
-foreach ($b in $exes) {
+foreach ($b in $builds) {
     $b.sum = Get-Sum $b
     Write-Host "$($b.name): $($b.sum)"
 }
 
-$sum = $exes[0].sum
+$sum = $builds[0].sum
 if ($Twice) {
-    if ($exes[0].sum -ne $exes[1].sum) {
+    if ($builds[0].sum -ne $builds[1].sum) {
         Write-Host "FAIL  two builds on this host produced different bytes"
         exit 1
     }
@@ -104,7 +106,7 @@ if ($Twice) {
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $Prefix "bin") | Out-Null
-Copy-Item -Force (Join-Path $exes[0].out "bin" "FirefoxPasswordView.exe") (Join-Path $Prefix "bin")
+Copy-Item -Force (Get-ExePath $builds[0]) (Join-Path $Prefix "bin")
 
 $label = "$env:RUNNER_OS $env:RUNNER_ARCH"
 Write-Host "sha256 $sum  $Target  built on $label"

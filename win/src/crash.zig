@@ -26,7 +26,7 @@ var reporting = false;
 
 const title = std.unicode.utf8ToUtf16LeStringLiteral("Firefox Password View");
 
-const fallback = "The app hit a bug and has to close.";
+const headline = "The app hit a bug and has to close.";
 
 pub fn report(msg: []const u8, first_trace_addr: ?usize) noreturn {
     @branchHint(.cold);
@@ -40,7 +40,10 @@ pub fn report(msg: []const u8, first_trace_addr: ?usize) noreturn {
     // memory dump taken during that wait holds the revealed password.
     if (model) |m| m.wipeSecrets();
 
-    var body: [1024]u8 = undefined;
+    // std.debug.panicExtra formats into a 0x1000-byte buffer, so a safety
+    // panic's text reaches 4096 bytes. A shorter buffer here would drop it and
+    // show the headline alone.
+    var body: [4608]u8 = undefined;
     const written: []const u8 = std.fmt.bufPrint(&body,
         \\{s}
         \\
@@ -49,9 +52,11 @@ pub fn report(msg: []const u8, first_trace_addr: ?usize) noreturn {
         \\
         \\Please report this at
         \\https://github.com/lkraider/firefox-password-view/issues
-    , .{ fallback, msg, first_trace_addr orelse 0 }) catch fallback;
+    , .{ headline, msg, first_trace_addr orelse 0 }) catch headline;
 
-    var wide: [2048]u16 = undefined;
+    // UTF-8 spends at least one byte per UTF-16 unit, so this holds whatever
+    // bufPrint wrote above.
+    var wide: [4608]u16 = undefined;
     _ = text_mod.wideZ(&wide, written);
     _ = w.MessageBoxW(null, @ptrCast(&wide), title, w.MB_OK | w.MB_ICONERROR);
 
