@@ -392,6 +392,14 @@ no permission prompt.
   `std.debug.writeStackTrace`, whose signature now wants
   `*debug.StackTrace`. The runner fails to compile. Plain `zig build
   test` still runs the fuzz corpus once, with no mutation.
+- Zig 0.16.0's `aarch64-windows` build cannot run `zig build`. On a
+  `windows-11-arm` runner it answers `zig version` and `zig env`, then exits
+  `-1073741819`, an access violation, printing nothing. `ci.yml`'s
+  `windows-arm-test` therefore runs the `x86_64-windows` toolchain under
+  Windows-on-ARM emulation and cross-compiles with
+  `-Dtarget=aarch64-windows-gnu`. `zig build test` runs on `windows-latest`
+  and on `macos-15`. No machine runs the core tests compiled for arm64
+  Windows.
 - Linux is deferred. The core builds for `x86_64-linux-musl` today. A
   Linux TUI needs the profile directory (`~/.mozilla/firefox`) and a
   clipboard call to replace `pbcopy`.
