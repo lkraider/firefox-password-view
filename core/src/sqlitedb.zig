@@ -205,6 +205,7 @@ pub const RowIterator = struct {
     stack: [max_depth]Frame = undefined,
     depth: usize = 0,
     started: bool = false,
+    pushed: u32 = 0,
 
     const Frame = struct {
         page: u32,
@@ -261,6 +262,13 @@ pub const RowIterator = struct {
 
     fn push(self: *RowIterator, page: u32) (Error || ReadError)!void {
         if (self.depth == max_depth) return error.Corrupt;
+        // A valid b-tree reaches each page once, so a walk that descends into
+        // more pages than the file holds is revisiting one. The depth limit
+        // above counts nesting alone. An interior page whose 71 cells all
+        // name the same child multiplies the work at every level and leaves
+        // the stack at one frame.
+        if (self.pushed == self.db.page_count) return error.Corrupt;
+        self.pushed += 1;
         const base: u32 = if (page == 1) 100 else 0;
 
         var head: [12]u8 = undefined;

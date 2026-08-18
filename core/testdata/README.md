@@ -28,6 +28,16 @@ generator write the same bytes. `core/test/oracle.zig` reads the file through
 `core/src/sqlitedb.zig` and through the system sqlite3, then compares every
 column.
 
+`tools/mkfixtures.py fanout` writes `fanout.db`. Python assembles those 23
+pages byte by byte, since sqlite3 refuses to write a b-tree that reaches one
+page twice. The file declares a `metaData` table with columns
+`id,item1,item2`, so `keydb.load` on it reaches the b-tree walk. Every
+interior page names the next page 72 times, once per cell and once as the
+rightmost child, and the walk therefore reaches 72<sup>21</sup> leaves. The
+page budget in `RowIterator.push` stops it after 23 pushes and returns
+`error.Corrupt`. sqlite3 reports `database disk image is malformed` for this
+file, so `core/test/oracle.zig` leaves it out of its fixture list.
+
 Some fixtures carry hand-written parts. Every such edit stays outside the
 encrypted bytes, so the crypto in each fixture is still Firefox's own
 output.
@@ -57,10 +67,11 @@ python3 tools/mkfixtures.py --profile /tmp/scratch fresh
 cp /tmp/scratch/key4.db /tmp/scratch/logins.json core/testdata/fresh/
 ```
 
-Regenerate `overflow.db` in place with:
+Regenerate `overflow.db` and `fanout.db` in place with:
 
 ```
 python3 tools/mkfixtures.py overflow
+python3 tools/mkfixtures.py fanout
 ```
 
 `core/src/tests.zig` asserts each fixture's password-check decrypts under its

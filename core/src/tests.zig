@@ -7,10 +7,11 @@ const aescbc = @import("aescbc.zig");
 const pbes2 = @import("pbes2.zig");
 const sdr = @import("sdr.zig");
 const keydb = @import("keydb.zig");
+const sqlitedb = @import("sqlitedb.zig");
 
 test {
     _ = @import("profiles.zig");
-    _ = @import("sqlitedb.zig");
+    _ = sqlitedb;
 }
 
 /// keydb.load reads key4.db through std.Io. Each caller below opens a profile
@@ -383,6 +384,27 @@ test "Store.search reports the true match count past the output cap" {
     const count = s.search("", &out);
     try testing.expectEqual(s.entries.len, count);
     try testing.expect(count > out.len);
+}
+
+fn drainRows(it: *sqlitedb.RowIterator) !void {
+    while (try it.next()) |_| {}
+}
+
+test "the fan-out fixture stops the walk at the page budget" {
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+
+    var db = try sqlitedb.Db.open(threaded.io(), "core/testdata/fanout.db");
+    defer db.close();
+
+    var buf: [4096]u8 = undefined;
+    const table = try db.table("metaData", &buf);
+
+    // The file holds 23 pages and every interior page names the next one 72
+    // times, so the walk reaches 72**21 leaves. The budget stops it after 23
+    // pushes.
+    var it = table.rows(&db, &buf);
+    try testing.expectError(error.Corrupt, drainRows(&it));
 }
 
 test "profiles.enumerate on two-profiles finds the one with no key4.db" {

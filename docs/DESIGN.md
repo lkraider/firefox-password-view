@@ -26,6 +26,24 @@ file filters on CKA_ID `f8000000000000000000000000000001` and object class
 text, because the column count moves: `nssPrivate` declares 192 columns in
 the `unmigrated` fixture and 193 in every other one.
 
+### Two limits bound the b-tree walk
+
+`RowIterator` caps its stack at 24 frames. That limit stops a walk on a page
+that points back at itself or at an ancestor.
+
+`RowIterator` also caps how many pages one walk descends into, at the file's
+own page count. A valid b-tree reaches each page once. An interior page whose
+cells all name one child multiplies the work at every level while the stack
+stays under 24 frames. Measured before the page budget landed: a crafted
+11,776-byte `key4.db` made `keydb.load` run over 20 seconds with no return,
+and a 6,144-byte one yielded 1,048,576 rows in 3.9 seconds. The same crafted
+file now returns `error.QueryFailed` in 0.37 seconds.
+
+The budget bounds total reads at the page count times the cells one page
+holds. A 512-byte page holds at most 71 interior cells and a 4096-byte page at
+most 2044. `overflow.db` pushes 256 pages against a budget of 772.
+`core/testdata/fanout.db` is the fixture that reaches the budget.
+
 ### Two master keys, one key id
 
 A profile Firefox 144 has opened holds **two** rows under CKA_ID

@@ -12,13 +12,15 @@ Usage:
     tools/mkfixtures.py sync-shaped --profile core/testdata/sync-shaped/profile
     tools/mkfixtures.py migrate     --profile core/testdata/migrated/profile
     tools/mkfixtures.py overflow
+    tools/mkfixtures.py fanout
 
-Each of those subcommands launches Firefox, drives it, and quits it. Firefox
+The first four subcommands launch Firefox, drive it, and quit it. Firefox
 must be fully closed before the caller reads key4.db or logins.json, so this
 script always waits for the child process to exit.
 
 The `overflow` subcommand runs no Firefox. It writes one database through
-Python's own sqlite3. See core/testdata/README.md.
+Python's own sqlite3. The `fanout` subcommand runs neither, and assembles its
+pages byte by byte. See core/testdata/README.md.
 """
 
 import argparse
@@ -26,6 +28,7 @@ import json
 import os
 import socket
 import sqlite3
+import struct
 import subprocess
 import sys
 import time
@@ -374,12 +377,142 @@ def cmd_overflow(args):
     con.close()
 
 
+# The fan-out fixture. sqlite3 refuses to write a b-tree that reaches one page
+# twice, so cmd_fanout below assembles every page byte by byte.
+FANOUT_PAGE_SIZE = 512
+# A 512-byte interior page carries a 12-byte header and 5-byte cells. 71 cells
+# take 355 content bytes and 142 pointer bytes, and 12 + 355 + 142 is 509. A
+# 72nd cell overlaps the pointer array with the content area, and the reader
+# returns Corrupt for that instead of for the page budget.
+FANOUT_CELLS = 71
+# Each level multiplies the child count by 72. At 21 levels the walk reaches
+# 72**21 leaves through a 23-page file.
+FANOUT_LEVELS = 21
+
+
+def sqlite_varint(n):
+    """SQLite's own varint: big-endian, 7 bits per byte. This is not LEB128."""
+    if n < 0x80:
+        return bytes([n])
+    out = []
+    while n:
+        out.append(n & 0x7F)
+        n >>= 7
+    out.reverse()
+    return bytes([b | 0x80 for b in out[:-1]]) + bytes([out[-1]])
+
+
+def fanout_file_header(page_count):
+    """The 100-byte header at offset 0. sqlitedb.Db.open reads six fields."""
+    h = bytearray(100)
+    h[0:16] = b"SQLite format 3\x00"
+    h[16:18] = struct.pack(">H", FANOUT_PAGE_SIZE)
+    h[18] = 1  # write version 1, so the reader does not report WalJournal
+    h[19] = 1
+    h[20] = 0  # no reserved tail, so usable equals the page size
+    h[21] = 64
+    h[22] = 32
+    h[23] = 32
+    h[24:28] = struct.pack(">I", 1)
+    h[28:32] = struct.pack(">I", page_count)
+    h[44:48] = struct.pack(">I", 4)
+    h[56:60] = struct.pack(">I", 1)  # text encoding UTF-8
+    h[92:96] = struct.pack(">I", 1)
+    h[96:100] = struct.pack(">I", 3045000)
+    return bytes(h)
+
+
+def fanout_page1(page_count, root):
+    """Page 1: the file header, then a sqlite_master leaf naming metaData.
+
+    keydb.load looks up `metaData`, so the walk this fixture triggers starts
+    from a real lookup rather than from a hand-built RowIterator.
+    """
+    sql = b"CREATE TABLE metaData(id,item1,item2)"
+    # Serial types for the five sqlite_master columns: text 5, text 8, text 8,
+    # 1-byte integer, text len(sql). An odd type from 13 is text of
+    # (type - 13) / 2 bytes.
+    header = bytes([6, 13 + 2 * 5, 13 + 2 * 8, 13 + 2 * 8, 1, 13 + 2 * len(sql)])
+    payload = header + b"table" + b"metaData" + b"metaData" + bytes([root]) + sql
+    cell = sqlite_varint(len(payload)) + sqlite_varint(1) + payload
+
+    body = bytearray(FANOUT_PAGE_SIZE - 100)
+    start = len(body) - len(cell)
+    body[start:] = cell
+    body[0] = 0x0D  # table leaf
+    body[3:5] = struct.pack(">H", 1)
+    body[5:7] = struct.pack(">H", 100 + start)
+    # The cell pointer array of a leaf starts at page offset 8. A zero here
+    # sends the reader to a cell at offset 0, and it returns Corrupt for that
+    # instead of for the page budget.
+    body[8:10] = struct.pack(">H", 100 + start)
+    return fanout_file_header(page_count) + bytes(body)
+
+
+def fanout_interior(child):
+    """An interior table page whose every child pointer names `child`."""
+    p = bytearray(FANOUT_PAGE_SIZE)
+    p[0] = 0x05  # table interior
+    p[8:12] = struct.pack(">I", child)  # the rightmost child
+    cell = struct.pack(">I", child) + sqlite_varint(1)
+
+    content = FANOUT_PAGE_SIZE
+    offsets = []
+    for _ in range(FANOUT_CELLS):
+        content -= len(cell)
+        p[content:content + len(cell)] = cell
+        offsets.append(content)
+
+    p[3:5] = struct.pack(">H", FANOUT_CELLS)
+    p[5:7] = struct.pack(">H", content)
+    for i, offset in enumerate(offsets):
+        p[12 + 2 * i:14 + 2 * i] = struct.pack(">H", offset)
+    return bytes(p)
+
+
+def fanout_leaf():
+    """One leaf holding one row, so a walk that reaches it returns a row."""
+    p = bytearray(FANOUT_PAGE_SIZE)
+    payload = bytes([2, 9])  # header length 2, serial 9, the constant 1
+    cell = sqlite_varint(len(payload)) + sqlite_varint(1) + payload
+    start = FANOUT_PAGE_SIZE - len(cell)
+    p[start:] = cell
+    p[0] = 0x0D
+    p[3:5] = struct.pack(">H", 1)
+    p[5:7] = struct.pack(">H", start)
+    p[8:10] = struct.pack(">H", start)
+    return bytes(p)
+
+
+def cmd_fanout(args):
+    """Writes one database whose b-tree reaches the same pages many times.
+
+    Every interior page names the next page 72 times, once per cell and once
+    as the rightmost child. The walk reaches 22 stack frames against
+    RowIterator's limit of 24, so the depth check lets it run. The page budget
+    in RowIterator.push stops it.
+
+    This function writes the bytes. sqlite3 rejects the result, so
+    core/test/oracle.zig leaves it out of its fixture list.
+    """
+    page_count = 2 + FANOUT_LEVELS
+    pages = [fanout_page1(page_count, 2)]
+    for i in range(FANOUT_LEVELS):
+        pages.append(fanout_interior(3 + i))
+    pages.append(fanout_leaf())
+
+    with open(args.fanout_out, "wb") as f:
+        f.write(b"".join(pages))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--firefox", default=DEFAULT_FIREFOX, help="path to the firefox binary")
     parser.add_argument("--profile", help="profile directory to create or reopen")
     parser.add_argument("--out", default="core/testdata/overflow.db",
                         help="output path for the overflow fixture")
+    parser.add_argument("--fanout-out", default="core/testdata/fanout.db",
+                        help="output path for the fan-out fixture")
     parser.add_argument("--port", type=int, default=MARIONETTE_PORT)
     sub = parser.add_subparsers(dest="fixture", required=True)
     sub.add_parser("fresh")
@@ -387,12 +520,18 @@ def main():
     sub.add_parser("sync-shaped")
     sub.add_parser("migrate")
     sub.add_parser("overflow")
+    sub.add_parser("fanout")
 
     args = parser.parse_args()
 
     if args.fixture == "overflow":
         cmd_overflow(args)
         print(f"wrote {args.out}")
+        return
+
+    if args.fixture == "fanout":
+        cmd_fanout(args)
+        print(f"wrote {args.fanout_out}")
         return
 
     if args.profile is None:
