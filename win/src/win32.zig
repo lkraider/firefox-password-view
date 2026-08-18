@@ -350,6 +350,7 @@ pub extern "user32" fn ShowWindow(HWND, c_int) callconv(.winapi) BOOL;
 pub extern "user32" fn UpdateWindow(HWND) callconv(.winapi) BOOL;
 pub extern "user32" fn GetMessageW(*MSG, ?HWND, UINT, UINT) callconv(.winapi) BOOL;
 pub extern "user32" fn TranslateMessage(*const MSG) callconv(.winapi) BOOL;
+pub extern "user32" fn IsDialogMessageW(HWND, *MSG) callconv(.winapi) BOOL;
 pub extern "user32" fn DispatchMessageW(*const MSG) callconv(.winapi) LRESULT;
 pub extern "user32" fn PostQuitMessage(c_int) callconv(.winapi) void;
 pub extern "user32" fn LoadCursorW(?HINSTANCE, LPCWSTR) callconv(.winapi) ?HCURSOR;

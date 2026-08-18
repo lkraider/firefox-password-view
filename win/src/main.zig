@@ -143,6 +143,10 @@ pub fn main(init: std.process.Init) !u8 {
         if (accel) |table| {
             if (w.TranslateAcceleratorW(hwnd, table, &msg) != 0) continue;
         }
+        // Tab moves the focus between the search box and the list. Both
+        // children carry WS_TABSTOP, and IsDialogMessageW reads that bit.
+        // The accelerator table above claims Enter and Escape first.
+        if (w.IsDialogMessageW(hwnd, &msg) != 0) continue;
         _ = w.TranslateMessage(&msg);
         _ = w.DispatchMessageW(&msg);
     }
