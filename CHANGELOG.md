@@ -43,9 +43,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   own window class is up. `windows-latest` also runs the core tests at
   `ReleaseSafe`, the mode `scripts/package-release.sh` builds, beside the
   Debug run on `macos-15`.
-- Every CI run records each Windows exe's SHA-256 in the run summary, from
-  all three build hosts. `windows-latest` builds `x86_64` twice in parallel
-  and fails when the two sums differ.
+- CI asserts that every build host produces the same Windows exe. Each build
+  job records its exe's SHA-256 in the run summary, and the `compare-sums` job
+  waits for all of them and compares one sum per target. `windows-latest` also
+  builds `x86_64` twice in parallel and fails when those two differ.
+- `scripts/package-release.sh` starts both Windows builds beside the macOS
+  chain, each with its own cache directory and install prefix. Two runs across
+  a clean produced four identical artifacts, and every artifact matches what
+  the sequential script wrote.
 
 ### Changed
 

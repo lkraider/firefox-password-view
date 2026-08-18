@@ -17,6 +17,10 @@ jobs:
     # Swift 6. macos-14's default Xcode ships Swift 5.10.
     runs-on: macos-15
 
+    outputs:
+      win_x86_64: ${{ steps.cross.outputs.x86_64_windows_gnu }}
+      win_arm64: ${{ steps.cross.outputs.aarch64_windows_gnu }}
+
     steps:
       - uses: actions/checkout@v7
 
@@ -53,6 +57,7 @@ jobs:
         run: ./scripts/bundle.sh
 
       - name: Cross-compile every shipped target
+        id: cross
         # ReleaseSafe matches scripts/package-release.sh, so this step compiles
         # the same source with the same flags that script uses.
         #
@@ -89,6 +94,7 @@ jobs:
             echo "sha256 $sum  $target  built on macOS ARM64"
             echo "- \`$target\` built on \`macOS ARM64\`, the host that builds a release: \`$sum\`" \
               >> "$GITHUB_STEP_SUMMARY"
+            echo "$(echo "$target" | tr - _)=$sum" >> "$GITHUB_OUTPUT"
           done
 
   windows-test:
@@ -96,6 +102,9 @@ jobs:
     # -Doracle=false drops the differential test, since a Windows runner has
     # no sqlite3 development install.
     runs-on: windows-latest
+
+    outputs:
+      sum: ${{ steps.build.outputs.sum }}
 
     steps:
       - uses: actions/checkout@v7
@@ -116,20 +125,21 @@ jobs:
           Expand-Archive -Path zig.zip -DestinationPath zig
           Remove-Item zig.zip
 
-      # scripts/package-release.sh builds at ReleaseSafe. Measured on Zig 0.16.0:
-      # ReleaseSafe fills undefined memory with 0xAA, as Debug does, and keeps
-      # the bounds, overflow and alignment checks. It also runs the optimizer,
-      # so this step tests the code generation of a released exe. build-and-test
-      # runs the same suite in Debug on macos-15.
-      - name: zig build test
-        run: .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe build test -Doptimize=ReleaseSafe -Doracle=false
-
-      - name: Build the app twice and record its sum
+      # Three zig processes at once: two builds of the exe and the test suite.
+      # Measured on a development Mac: 19 seconds of wall clock for 76 of cpu.
+      #
+      # The tests run at ReleaseSafe, which scripts/package-release.sh builds
+      # with. Measured on Zig 0.16.0: ReleaseSafe fills undefined memory with
+      # 0xAA, as Debug does, and keeps the bounds, overflow and alignment
+      # checks. It also runs the optimizer, so this step tests the code
+      # generation of a released exe. build-and-test runs the suite in Debug.
+      - name: Test and build the app twice, in parallel
+        id: build
         shell: pwsh
         run: >
           .\scripts\win-build-hash.ps1
           -Zig .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe
-          -Target x86_64-windows-gnu -Twice
+          -Target x86_64-windows-gnu -Twice -WithTests
 
       - name: Launch the app against the fresh fixture
         shell: pwsh
@@ -147,6 +157,9 @@ jobs:
     # violation, and prints nothing. `zig build test` therefore runs on
     # windows-latest and on macos-15, and this job builds and launches.
     runs-on: windows-11-arm
+
+    outputs:
+      sum: ${{ steps.build.outputs.sum }}
 
     steps:
       - uses: actions/checkout@v7
@@ -171,6 +184,7 @@ jobs:
       # One build. The emulated compiler took 192 seconds for it, and
       # windows-test above already builds twice against the same toolchain.
       - name: Cross-compile the arm64 app and record its sum
+        id: build
         shell: pwsh
         run: >
           .\scripts\win-build-hash.ps1
@@ -180,6 +194,28 @@ jobs:
       - name: Launch the arm64 app against the fresh fixture
         shell: pwsh
         run: .\scripts\win-launch-check.ps1
+
+  compare-sums:
+    # Asserts that every build host produced the same exe. The three jobs above
+    # publish one sum per target, and `needs` holds this job until each one has
+    # finished. Nothing here builds, so the runner that starts fastest runs it.
+    needs: [build-and-test, windows-test, windows-arm-test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: x86_64-windows-gnu, from macos-15 and windows-latest
+        run: >
+          scripts/compare-sums.sh x86_64-windows-gnu
+          "macos-15=${{ needs.build-and-test.outputs.win_x86_64 }}"
+          "windows-latest=${{ needs.windows-test.outputs.sum }}"
+
+      - name: aarch64-windows-gnu, from macos-15 and windows-11-arm
+        run: >
+          scripts/compare-sums.sh aarch64-windows-gnu
+          "macos-15=${{ needs.build-and-test.outputs.win_arm64 }}"
+          "windows-11-arm=${{ needs.windows-arm-test.outputs.sum }}"
 
   reproducible-build:
     # Packages the release artifacts twice from a clean state and diffs
@@ -210,7 +246,8 @@ jobs:
         run: ./scripts/package-release.sh 0.0.0-repro-check dist1
 
       - name: Clean every build artifact
-        run: rm -rf .zig-cache zig-out macos/.build
+        # package-release.sh gives each Windows build its own cache and prefix.
+        run: rm -rf .zig-cache zig-out macos/.build .zig-cache-x86_64 .zig-cache-arm64 out-x86_64 out-arm64
 
       - name: Package again
         run: ./scripts/package-release.sh 0.0.0-repro-check dist2

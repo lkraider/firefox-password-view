@@ -3,6 +3,12 @@
 #
 # Usage:
 #   scripts/win-build-hash.ps1 -Zig <zig> -Target x86_64-windows-gnu [-Twice]
+#     [-WithTests]
+#
+# -WithTests starts `zig build test` beside the builds. That invocation passes
+# no -Dtarget, so the test binaries are native and zig runs them. A -Dtarget of
+# x86_64-windows-gnu on an msvc-ABI host can make zig treat the test binaries
+# as foreign and skip the run steps, and a skipped run reports success.
 #
 # -Twice starts a second build beside the first. Each build gets its own cache
 # directory and its own install prefix, so the two run in parallel and neither
@@ -29,6 +35,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Zig,
     [Parameter(Mandatory = $true)][string]$Target,
     [switch]$Twice,
+    [switch]$WithTests,
     [string]$Prefix = "zig-out"
 )
 
@@ -56,6 +63,15 @@ if ($Twice) {
 
 foreach ($b in $builds) { $b.proc = Start-Build $b }
 Write-Host "started $($builds.Count) build(s) of $Target"
+
+if ($WithTests) {
+    $tests = [ordered]@{ name = "zig build test"; log = "build-test.log" }
+    $tests.proc = Start-Process -FilePath $Zig -NoNewWindow -PassThru `
+        -ArgumentList @("build", "test", "-Doptimize=ReleaseSafe", "-Doracle=false") `
+        -RedirectStandardOutput $tests.log -RedirectStandardError "$($tests.log).err"
+    Write-Host "started zig build test beside them"
+    $builds += $tests
+}
 Wait-Process -Id ($builds | ForEach-Object { $_.proc.Id })
 
 $failed = $false
@@ -70,14 +86,15 @@ foreach ($b in $builds) {
 }
 if ($failed) { exit 1 }
 
-foreach ($b in $builds) {
+$exes = $builds | Where-Object { $_.out }
+foreach ($b in $exes) {
     $b.sum = Get-Sum $b
     Write-Host "$($b.name): $($b.sum)"
 }
 
-$sum = $builds[0].sum
+$sum = $exes[0].sum
 if ($Twice) {
-    if ($builds[0].sum -ne $builds[1].sum) {
+    if ($exes[0].sum -ne $exes[1].sum) {
         Write-Host "FAIL  two builds on this host produced different bytes"
         exit 1
     }
@@ -85,11 +102,15 @@ if ($Twice) {
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $Prefix "bin") | Out-Null
-Copy-Item -Force (Join-Path $builds[0].out "bin" "FirefoxPasswordView.exe") (Join-Path $Prefix "bin")
+Copy-Item -Force (Join-Path $exes[0].out "bin" "FirefoxPasswordView.exe") (Join-Path $Prefix "bin")
 
 $label = "$env:RUNNER_OS $env:RUNNER_ARCH"
 Write-Host "sha256 $sum  $Target  built on $label"
 if ($env:GITHUB_STEP_SUMMARY) {
     "- ``$Target`` built on ``$label``: ``$sum``" |
         Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+}
+# ci.yml's compare-sums job reads this through the job's outputs.
+if ($env:GITHUB_OUTPUT) {
+    "sum=$sum" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
 }

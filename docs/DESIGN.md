@@ -183,6 +183,7 @@ scripts/
   wine-shutdown.sh     ends a wine prefix's session and kills its helpers
   win-launch-check.ps1 launches the Windows exe on a CI runner
   win-build-hash.ps1   builds the Windows exe and records its SHA-256
+  compare-sums.sh      asserts every build host recorded one sum per target
   winid.swift          lists every on-screen window and its bounds
   macinput.swift       posts synthetic mouse and keyboard events through CGEvent
   pixdiff.swift        counts differing pixels in one rectangle of two captures
@@ -308,6 +309,19 @@ a host without the Command Line Tools. The C ABI library still links libc,
 and that link needs the same SDK, so cross-compiling `libffpw.a` to macOS
 from another host stays out of reach.
 
+Three build hosts produce the same Windows exe, and `ci.yml` asserts it. Each
+build job writes its exe's SHA-256 to the run summary and publishes it as a job
+output: `build-and-test` cross-compiles both targets on `macos-15`, the host
+`scripts/package-release.sh` runs on, `windows-test` builds `x86_64` twice in
+parallel on `windows-latest`, and `windows-arm-test` cross-compiles `arm64` on
+`windows-11-arm` through the emulated x86_64 toolchain. The `compare-sums` job
+waits for all three and runs `scripts/compare-sums.sh` once per target. An
+empty sum fails that job, since two missing values compare equal.
+
+`windows-test` also fails when its own two builds disagree. `build.zig` pins
+the cpu to a baseline, so the target string decides the code generation on
+every host.
+
 Nothing else links a C library. `zig build -Dtarget=x86_64-windows-gnu`,
 `-Dtarget=aarch64-windows-gnu` and `-Dtarget=x86_64-linux-musl` all run on
 this Mac. `build.zig` names `user32`, `comctl32`, `gdi32`, `dwmapi`,
@@ -419,15 +433,6 @@ no permission prompt.
   environment, as `zig-build-macos-sdk` does for Ghostty. Until then
   `Formula/ffpw.rb` and `Casks/firefox-password-view.rb` carry CI's hash,
   printed by `ci.yml`'s `reproducible-build` job on every push.
-- Three build hosts produce the same Windows exe, and no job asserts it.
-  Every run writes each exe's SHA-256 to the run summary. `build-and-test`
-  cross-compiles both targets on `macos-15`, the host
-  `scripts/package-release.sh` runs on. `windows-test` builds `x86_64` twice in
-  parallel on `windows-latest` and fails when those two sums differ.
-  `windows-arm-test` cross-compiles `arm64` on `windows-11-arm`. The first run
-  that recorded all of them reported one sum per target across the three hosts,
-  and a development Mac reproduced the `x86_64` sum. Comparing one job's sum
-  against another's needs a job with `needs:` on all three build jobs.
 
 ## Prior art
 
