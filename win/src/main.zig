@@ -216,6 +216,14 @@ fn windowProc(hwnd: w.HWND, message: w.UINT, wparam: w.WPARAM, lparam: w.LPARAM)
             if (appOf(hwnd)) |app| layout(app, hwnd);
             return 0;
         },
+        // The frame holds the focus at startup, and a click on the frame
+        // returns it here. Typing belongs in the search box.
+        w.WM_SETFOCUS => {
+            if (appOf(hwnd)) |app| {
+                if (app.search) |search| _ = w.SetFocus(search);
+            }
+            return 0;
+        },
         w.WM_COMMAND => {
             if (appOf(hwnd)) |app| return onCommand(app, hwnd, wparam);
             return 0;
