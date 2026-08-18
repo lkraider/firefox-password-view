@@ -54,7 +54,7 @@ jobs:
 
       - name: Cross-compile every shipped target
         # ReleaseSafe matches scripts/package-release.sh, so this step compiles
-        # the code the released zips carry.
+        # the same source with the same flags that script uses.
         #
         # The three targets build at once. Each gets its own cache directory and
         # its own prefix, so no build reads another's artifacts and one output
@@ -63,7 +63,8 @@ jobs:
         # Mac, so the extra flags change no byte of the exe.
         #
         # Each Windows exe's sum goes in the run summary, beside the ones the
-        # two Windows jobs record. These are the bytes a release carries.
+        # two Windows jobs record. scripts/package-release.sh cross-compiles
+        # from this host with these flags, so a released zip holds these bytes.
         run: |
           targets="x86_64-windows-gnu aarch64-windows-gnu x86_64-linux-musl"
           jobs=""
@@ -86,7 +87,7 @@ jobs:
           for target in x86_64-windows-gnu aarch64-windows-gnu; do
             sum=$(shasum -a 256 "out-$target/bin/FirefoxPasswordView.exe" | cut -d' ' -f1)
             echo "sha256 $sum  $target  built on macOS ARM64"
-            echo "- \`$target\` built on \`macOS ARM64\`, the bytes a release ships: \`$sum\`" \
+            echo "- \`$target\` built on \`macOS ARM64\`, the host that builds a release: \`$sum\`" \
               >> "$GITHUB_STEP_SUMMARY"
           done
 
@@ -115,11 +116,11 @@ jobs:
           Expand-Archive -Path zig.zip -DestinationPath zig
           Remove-Item zig.zip
 
-      # ReleaseSafe is the mode the released zips carry. Measured on Zig 0.16.0:
+      # scripts/package-release.sh builds at ReleaseSafe. Measured on Zig 0.16.0:
       # ReleaseSafe fills undefined memory with 0xAA, as Debug does, and keeps
       # the bounds, overflow and alignment checks. It also runs the optimizer,
-      # so this step tests the code generation a user gets. build-and-test runs
-      # the same suite in Debug on macos-15.
+      # so this step tests the code generation of a released exe. build-and-test
+      # runs the same suite in Debug on macos-15.
       - name: zig build test
         run: .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe build test -Doptimize=ReleaseSafe -Doracle=false
 

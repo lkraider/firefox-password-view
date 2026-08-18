@@ -421,8 +421,9 @@ no permission prompt.
   printed by `ci.yml`'s `reproducible-build` job on every push.
 - Cross-host reproducibility of the Windows exe is unmeasured. Every run
   writes each exe's SHA-256 to the run summary: `build-and-test`
-  cross-compiles both on `macos-15` and ships those bytes, `windows-test`
-  builds `x86_64` twice on `windows-latest` and fails when the two differ,
+  cross-compiles both on `macos-15`, the host `scripts/package-release.sh`
+  runs on, `windows-test` builds `x86_64` twice on `windows-latest` and fails
+  when the two differ,
   and `windows-arm-test` cross-compiles `arm64` on `windows-11-arm`. Nothing
   compares the sums across hosts. Reading them from one run page is the first
   step toward that comparison.

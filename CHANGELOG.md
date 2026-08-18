@@ -41,7 +41,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   launches it against the `fresh` fixture through
   `scripts/win-launch-check.ps1`, and asserts the process is alive and its
   own window class is up. `windows-latest` also runs the core tests at
-  `ReleaseSafe`, the mode a user gets, beside the Debug run on `macos-15`.
+  `ReleaseSafe`, the mode `scripts/package-release.sh` builds, beside the
+  Debug run on `macos-15`.
 - Every CI run records each Windows exe's SHA-256 in the run summary, from
   all three build hosts. `windows-latest` builds `x86_64` twice in parallel
   and fails when the two sums differ.

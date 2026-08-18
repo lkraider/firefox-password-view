@@ -12,7 +12,7 @@
 # build of x86_64-windows-gnu all produced the same sum, so a separate
 # --cache-dir and -p change nothing in the exe.
 #
-# The winning exe lands in -Prefix, where scripts/win-launch-check.ps1 reads it.
+# Build 1's exe lands in -Prefix, where scripts/win-launch-check.ps1 reads it.
 #
 # The target is explicit, because a native build on a Windows host resolves to
 # the msvc ABI and scripts/package-release.sh ships the gnu one. build.zig pins
@@ -20,10 +20,10 @@
 # the sum is comparable across build hosts.
 #
 # Each run appends its sum to the job summary. build-and-test appends the sums
-# of the exes it cross-compiles on macos-15, which are the bytes a release
-# carries. One run page therefore holds every host's answer for one source
-# tree. Nothing compares them across hosts yet, and docs/DESIGN.md's known
-# limitations record why.
+# of the exes it cross-compiles on macos-15, the host and the flags
+# scripts/package-release.sh uses for a release. One run page therefore holds
+# every host's answer for one source tree. Nothing compares them across hosts
+# yet, and docs/DESIGN.md's known limitations record why.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Zig,

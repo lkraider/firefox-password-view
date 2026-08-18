@@ -8,8 +8,8 @@
 #
 # A window of class #32770 is a MessageBoxW, so reportFatal ran and the process
 # is parked on a modal dialog. On a session with no interactive desktop,
-# MessageBoxW with a null owner returns 0 at once and the app exits 1, so the
-# liveness check catches a startup failure either way.
+# MessageBoxW with a null owner returns 0 at once and the app exits 1. The
+# liveness check below then fails.
 #
 # Both GitHub-hosted Windows runners draw a window for a process launched this
 # way, so a missing window fails the run.

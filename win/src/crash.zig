@@ -10,7 +10,7 @@
 //! `report` receives strings like `index out of bounds: index 512, len 511`.
 //!
 //! This file imports `win32.zig`, so `zig build test` cannot run its code on
-//! the build host. `Model.wipeSecrets` carries the part that is testable there.
+//! the build host. `Model.wipeSecrets` holds the part `zig build test` covers.
 
 const std = @import("std");
 

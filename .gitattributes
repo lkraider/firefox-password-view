@@ -1,8 +1,8 @@
 # The Windows CI runners set core.autocrlf in their system gitconfig, so a
 # checkout there rewrites every text file to CRLF. win/src/ids.zig embeds
 # win/src/resource.h and searches it for `#define NAME value\n`, and that
-# search finds nothing in a CRLF copy. scripts/*.sh run under sh, which reads
-# a trailing \r as part of the command.
+# search finds nothing in a CRLF copy. sh reads a trailing \r as part of a
+# command, so scripts/*.sh need LF too.
 * text=auto eol=lf
 
 *.db binary
