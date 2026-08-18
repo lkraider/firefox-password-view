@@ -419,14 +419,15 @@ no permission prompt.
   environment, as `zig-build-macos-sdk` does for Ghostty. Until then
   `Formula/ffpw.rb` and `Casks/firefox-password-view.rb` carry CI's hash,
   printed by `ci.yml`'s `reproducible-build` job on every push.
-- Cross-host reproducibility of the Windows exe is unmeasured. Every run
-  writes each exe's SHA-256 to the run summary: `build-and-test`
-  cross-compiles both on `macos-15`, the host `scripts/package-release.sh`
-  runs on, `windows-test` builds `x86_64` twice on `windows-latest` and fails
-  when the two differ,
-  and `windows-arm-test` cross-compiles `arm64` on `windows-11-arm`. Nothing
-  compares the sums across hosts. Reading them from one run page is the first
-  step toward that comparison.
+- Three build hosts produce the same Windows exe, and no job asserts it.
+  Every run writes each exe's SHA-256 to the run summary. `build-and-test`
+  cross-compiles both targets on `macos-15`, the host
+  `scripts/package-release.sh` runs on. `windows-test` builds `x86_64` twice in
+  parallel on `windows-latest` and fails when those two sums differ.
+  `windows-arm-test` cross-compiles `arm64` on `windows-11-arm`. The first run
+  that recorded all of them reported one sum per target across the three hosts,
+  and a development Mac reproduced the `x86_64` sum. Comparing one job's sum
+  against another's needs a job with `needs:` on all three build jobs.
 
 ## Prior art
 
