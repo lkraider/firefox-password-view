@@ -516,7 +516,10 @@ fn onCommand(app: *App, hwnd: w.HWND, wparam: w.WPARAM) w.LRESULT {
 }
 
 fn onNotify(app: *App, lparam: w.LPARAM) w.LRESULT {
-    const header: *const w.NMHDR = @ptrFromInt(@as(usize, @bitCast(lparam)));
+    // align(1) because commctrl.h declares NMLVKEYDOWN inside pshpack1.h. An
+    // arrow key in the list sends LVN_KEYDOWN with lparam 2 bytes off an
+    // 8-byte boundary. NMHDR's own fields sit at the same offsets either way.
+    const header: *align(1) const w.NMHDR = @ptrFromInt(@as(usize, @bitCast(lparam)));
     if (header.idFrom != ids.IDC_LIST) return 0;
 
     switch (header.code) {
