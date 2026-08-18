@@ -36,6 +36,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `scripts/win-launch-check.ps1`, and asserts the process is alive and its
   own window class is up.
 
+### Fixed
+
+- The SQLite reader followed a b-tree that reaches one page many times
+  until the caller gave up. A crafted 11,776-byte `key4.db` made
+  `keydb.load` run over 20 seconds with no return. One walk now descends
+  into at most as many pages as the file holds, and that file returns
+  `error.QueryFailed` in 0.37 seconds. `core/testdata/fanout.db` covers it.
+
 ### Changed
 
 - `core/src/sqlitedb.zig` replaces the two SQL statements in `keydb.zig`
