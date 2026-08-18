@@ -30,6 +30,15 @@ pub const Copy = union(enum) {
     failed,
 };
 
+/// Why the clipboard refused the plaintext `requestCopy` handed back.
+///
+/// This enum repeats the variants of `clipboard.Error`, and main.zig maps one
+/// to the other at its one call site. clipboard.zig imports win32.zig, which
+/// declares `extern "user32"` functions. build.zig builds this file's tests
+/// with the `core` import alone and runs them on the build host, so an import
+/// of clipboard.zig here would break that link.
+pub const CopyFailure = enum { clipboard_busy, too_long, invalid_text, out_of_memory };
+
 pub const Model = struct {
     gpa: std.mem.Allocator,
     io: std.Io,
@@ -196,6 +205,11 @@ pub const Model = struct {
     }
 
     /// Decrypts one row's password into `copy_buf`. The row stays masked.
+    ///
+    /// The status stays where it was. The clipboard has not taken the
+    /// plaintext yet, and `OpenClipboard` returns 0 while another process
+    /// holds the clipboard. main.zig calls `reportCopied` or
+    /// `reportCopyFailed` once it knows.
     pub fn requestCopy(self: *Model, row: usize, confirmed: bool) Copy {
         const index = self.entryIndex(row) orelse return .failed;
         if (self.isAccountRow(row) and !confirmed) return .needs_confirmation;
@@ -208,8 +222,20 @@ pub const Model = struct {
             return .failed;
         };
         self.copy_len = plain.len;
-        self.setStatus("{s}", .{"Copied"});
         return .{ .copied = self.copy_buf[0..self.copy_len] };
+    }
+
+    pub fn reportCopied(self: *Model) void {
+        self.setStatus("{s}", .{"Copied"});
+    }
+
+    pub fn reportCopyFailed(self: *Model, reason: CopyFailure) void {
+        self.setStatus("{s}", .{switch (reason) {
+            .clipboard_busy => "another program is using the clipboard",
+            .too_long => "this password is too long to copy",
+            .invalid_text => "this password is not valid text",
+            .out_of_memory => "out of memory",
+        }});
     }
 
     pub fn clearCopy(self: *Model) void {
@@ -324,13 +350,42 @@ test "a confirmed copy leaves the row masked and the next reveal asks again" {
         .copied => |text| try testing.expect(text.len > 0),
         else => return error.CopyFailed,
     }
-    try testing.expectEqualStrings("Copied", m.status());
+    // The clipboard has not taken it yet, so the bar still shows the count.
+    try testing.expectEqualStrings("5 logins", m.status());
     try testing.expect(m.revealed_index == null);
     m.clearCopy();
 
     // Confirming the copy answered that copy. The reveal is a second
     // decision.
     try testing.expectEqual(Reveal.needs_confirmation, m.toggleReveal(row, false));
+}
+
+test "the status carries the reason a copy failed" {
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    var m = testModel(&threaded);
+    defer m.deinit();
+    try openFixture(&m, "fresh");
+
+    // requestCopy hands main.zig the plaintext and leaves the bar alone.
+    switch (m.requestCopy(0, false)) {
+        .copied => {},
+        else => return error.CopyFailed,
+    }
+    try testing.expectEqualStrings("3 logins", m.status());
+    m.clearCopy();
+
+    m.reportCopyFailed(.clipboard_busy);
+    try testing.expectEqualStrings("another program is using the clipboard", m.status());
+    m.reportCopyFailed(.too_long);
+    try testing.expectEqualStrings("this password is too long to copy", m.status());
+    m.reportCopyFailed(.invalid_text);
+    try testing.expectEqualStrings("this password is not valid text", m.status());
+    m.reportCopyFailed(.out_of_memory);
+    try testing.expectEqualStrings("out of memory", m.status());
+
+    m.reportCopied();
+    try testing.expectEqualStrings("Copied", m.status());
 }
 
 test "clearCopy wipes the plaintext it handed the clipboard" {

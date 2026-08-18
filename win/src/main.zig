@@ -652,18 +652,32 @@ fn copySelected(app: *App, hwnd: w.HWND) void {
     switch (result) {
         .copied => |text| {
             var scratch: [secret_max]u16 = undefined;
-            app.clip.write(hwnd, text, &scratch) catch {
+            app.clip.write(hwnd, text, &scratch) catch |err| {
                 app.model.clearCopy();
+                app.model.reportCopyFailed(copyFailure(err));
                 showStatus(app);
                 return;
             };
             app.model.clearCopy();
+            app.model.reportCopied();
             _ = w.KillTimer(hwnd, ids.timer_clear_clipboard);
             _ = w.SetTimer(hwnd, ids.timer_clear_clipboard, secret_timeout_ms, null);
         },
         else => {},
     }
     showStatus(app);
+}
+
+/// The one place clipboard.zig's error set meets model.zig's enum. model.zig
+/// cannot import clipboard.zig, because build.zig runs its tests on the build
+/// host with no user32 to link.
+fn copyFailure(err: clipboard.Error) model_mod.CopyFailure {
+    return switch (err) {
+        error.ClipboardBusy => .clipboard_busy,
+        error.TooLong => .too_long,
+        error.InvalidUtf8 => .invalid_text,
+        error.OutOfMemory => .out_of_memory,
+    };
 }
 
 fn onTimer(app: *App, hwnd: w.HWND, id: w.WPARAM) void {
