@@ -35,11 +35,11 @@ jobs:
           tar -xf zig.tar.xz -C zig
           rm zig.tar.xz
 
-      - name: zig build test
-        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build test
-
-      - name: zig build smoke
-        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build smoke
+      # One invocation, so the build runner schedules both step trees at once
+      # against one cache. Debug here, and windows-test runs the same suite at
+      # ReleaseSafe.
+      - name: zig build test smoke
+        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build test smoke
 
       - name: Build the Zig core (release, for the macOS app to link)
         run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build -Doptimize=ReleaseSafe
@@ -55,10 +55,39 @@ jobs:
       - name: Cross-compile every shipped target
         # ReleaseSafe matches scripts/package-release.sh, so this step compiles
         # the code the released zips carry.
+        #
+        # The three targets build at once. Each gets its own cache directory and
+        # its own prefix, so no build reads another's artifacts and one output
+        # file per build holds its log. Two parallel builds and one sequential
+        # build of x86_64-windows-gnu produced the same sum on a development
+        # Mac, so the extra flags change no byte of the exe.
+        #
+        # Each Windows exe's sum goes in the run summary, beside the ones the
+        # two Windows jobs record. These are the bytes a release carries.
         run: |
-          for target in x86_64-windows-gnu aarch64-windows-gnu x86_64-linux-musl; do
+          targets="x86_64-windows-gnu aarch64-windows-gnu x86_64-linux-musl"
+          jobs=""
+          for target in $targets; do
             ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build \
-              -Dtarget="$target" -Doptimize=ReleaseSafe
+              -Dtarget="$target" -Doptimize=ReleaseSafe \
+              --cache-dir ".zig-cache-$target" -p "out-$target" \
+              > "build-$target.log" 2>&1 &
+            jobs="$jobs $!:$target"
+          done
+
+          status=0
+          for job in $jobs; do
+            wait "${job%%:*}" || status=1
+            echo "--- ${job#*:}"
+            cat "build-${job#*:}.log"
+          done
+          [ "$status" -eq 0 ] || exit 1
+
+          for target in x86_64-windows-gnu aarch64-windows-gnu; do
+            sum=$(shasum -a 256 "out-$target/bin/FirefoxPasswordView.exe" | cut -d' ' -f1)
+            echo "sha256 $sum  $target  built on macOS ARM64"
+            echo "- \`$target\` built on \`macOS ARM64\`, the bytes a release ships: \`$sum\`" \
+              >> "$GITHUB_STEP_SUMMARY"
           done
 
   windows-test:
@@ -86,11 +115,20 @@ jobs:
           Expand-Archive -Path zig.zip -DestinationPath zig
           Remove-Item zig.zip
 
+      # ReleaseSafe is the mode the released zips carry. Measured on Zig 0.16.0:
+      # ReleaseSafe fills undefined memory with 0xAA, as Debug does, and keeps
+      # the bounds, overflow and alignment checks. It also runs the optimizer,
+      # so this step tests the code generation a user gets. build-and-test runs
+      # the same suite in Debug on macos-15.
       - name: zig build test
-        run: .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe build test -Doracle=false
+        run: .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe build test -Doptimize=ReleaseSafe -Doracle=false
 
-      - name: zig build win
-        run: .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe build win -Doracle=false
+      - name: Build the app twice and record its sum
+        shell: pwsh
+        run: >
+          .\scripts\win-build-hash.ps1
+          -Zig .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe
+          -Target x86_64-windows-gnu -Twice
 
       - name: Launch the app against the fresh fixture
         shell: pwsh
@@ -129,9 +167,14 @@ jobs:
           Expand-Archive -Path zig.zip -DestinationPath zig
           Remove-Item zig.zip
 
-      # ReleaseSafe is what package-release.sh puts in the arm64 zip.
-      - name: Cross-compile the arm64 app
-        run: .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe build win -Dtarget=aarch64-windows-gnu -Doptimize=ReleaseSafe -Doracle=false
+      # One build. The emulated compiler took 192 seconds for it, and
+      # windows-test above already builds twice against the same toolchain.
+      - name: Cross-compile the arm64 app and record its sum
+        shell: pwsh
+        run: >
+          .\scripts\win-build-hash.ps1
+          -Zig .\zig\zig-x86_64-windows-${{ env.ZIG_VERSION }}\zig.exe
+          -Target aarch64-windows-gnu
 
       - name: Launch the arm64 app against the fresh fixture
         shell: pwsh

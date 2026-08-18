@@ -37,9 +37,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   process no console, so every panic before this went unreported.
 - CI runs the Windows exe on both architectures it ships for.
   `windows-latest` covers `x86_64` and `windows-11-arm` covers `arm64`. Each
-  job builds the app, launches it against the `fresh` fixture through
+  job builds the app at `ReleaseSafe` for the `gnu` ABI the release ships,
+  launches it against the `fresh` fixture through
   `scripts/win-launch-check.ps1`, and asserts the process is alive and its
-  own window class is up.
+  own window class is up. `windows-latest` also runs the core tests at
+  `ReleaseSafe`, the mode a user gets, beside the Debug run on `macos-15`.
+- Every CI run records each Windows exe's SHA-256 in the run summary, from
+  all three build hosts. `windows-latest` builds `x86_64` twice in parallel
+  and fails when the two sums differ.
 
 ### Changed
 

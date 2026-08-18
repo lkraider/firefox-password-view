@@ -5,6 +5,14 @@ zig/
 zig-out/
 zig-pkg/
 
+# One cache and one prefix per parallel build. scripts/win-build-hash.ps1 and
+# ci.yml's cross-compile step give each build its own, so neither reads the
+# other's artifacts.
+.zig-cache-*/
+out-*/
+build-*.log
+build-*.log.err
+
 # Swift Package Manager build artifacts for macos/.
 macos/.build/
 

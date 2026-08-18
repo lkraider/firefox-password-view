@@ -182,6 +182,7 @@ scripts/
   wine-check.sh        asserts the Windows app's behaviour under wine
   wine-shutdown.sh     ends a wine prefix's session and kills its helpers
   win-launch-check.ps1 launches the Windows exe on a CI runner
+  win-build-hash.ps1   builds the Windows exe and records its SHA-256
   winid.swift          lists every on-screen window and its bounds
   macinput.swift       posts synthetic mouse and keyboard events through CGEvent
   pixdiff.swift        counts differing pixels in one rectangle of two captures
@@ -418,6 +419,13 @@ no permission prompt.
   environment, as `zig-build-macos-sdk` does for Ghostty. Until then
   `Formula/ffpw.rb` and `Casks/firefox-password-view.rb` carry CI's hash,
   printed by `ci.yml`'s `reproducible-build` job on every push.
+- Cross-host reproducibility of the Windows exe is unmeasured. Every run
+  writes each exe's SHA-256 to the run summary: `build-and-test`
+  cross-compiles both on `macos-15` and ships those bytes, `windows-test`
+  builds `x86_64` twice on `windows-latest` and fails when the two differ,
+  and `windows-arm-test` cross-compiles `arm64` on `windows-11-arm`. Nothing
+  compares the sums across hosts. Reading them from one run page is the first
+  step toward that comparison.
 
 ## Prior art
 
