@@ -41,10 +41,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- The SQLite reader followed a b-tree that reaches one page many times
-  until the caller gave up. A crafted 11,776-byte `key4.db` made
-  `keydb.load` run over 20 seconds with no return. One walk now descends
-  into at most as many pages as the file holds.
 - Windows app: a profile whose `profiles.ini` name runs past 511 characters
   made the app exit with no window and no message. The conversion to UTF-16
   panicked, and the windows subsystem sends a panic to a stderr with no
