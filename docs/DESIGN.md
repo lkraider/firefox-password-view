@@ -174,7 +174,8 @@ what an activation means. It imports `core` and `std` alone, so `zig build
 test` runs its tests on the build host. `main.zig` owns the window, the
 timers and the dialogs. `win32.zig` holds the externs and `clipboard.zig`
 the clipboard writer. `text.zig` converts UTF-8 into a caller-sized UTF-16
-buffer, and its tests run on the build host too.
+buffer, and its tests run on the build host too. `crash.zig` holds the panic
+handler.
 
 The three Swift files above are one-shot tools. `screenshots.sh` and
 `wine-check.sh` each compile the ones they need with `swiftc -O` into their
@@ -188,6 +189,32 @@ prefix directory is deleted, reparented to launchd. A run leaves 8 of them
 without this call, and they accumulate until the Mac reboots. Their argv names
 no prefix, so `wine-shutdown.sh` reads each candidate's cwd through `lsof` and
 kills the ones inside the prefix it was given.
+
+### A panic on Windows shows a message box
+
+`build.zig` sets `win_exe.subsystem = .Windows`, so the process has no console
+and Zig's default panic write to stderr reaches nobody. A panic there closes
+the window and reports nothing.
+
+`main.zig` declares `pub const panic = std.debug.FullPanic(crash.report)`.
+`std.debug.panicExtra` formats each safety panic into text, so `crash.report`
+receives strings like `index out of bounds: index 512, len 511`. The handler
+shows that text, the return address and the issues URL in a `MessageBoxW` with
+a null owner, then calls `std.process.exit(3)`.
+
+`crash.report` calls `Model.wipeSecrets` first. `MessageBoxW` waits as long as
+the user takes, and a memory dump taken during that wait would hold the
+revealed password. `wipeSecrets` zeroes both 8192-byte buffers whole and reads
+no stored length, because a panic can arrive with `revealed_len` set past the
+buffer.
+
+`MessageBoxW` runs a modal message loop that dispatches to this thread's
+windows, so a panic inside `windowProc` re-enters `windowProc`. A `reporting`
+flag turns a second panic into `exit(3)` with no message.
+
+`ci.yml`'s two Windows jobs run `scripts/win-launch-check.ps1`, which asserts
+the exe is still alive 5 seconds after launch. That assertion fails on a panic
+during startup.
 
 ## Linking the core from another front end
 

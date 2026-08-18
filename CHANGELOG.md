@@ -26,6 +26,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   non-zero on a failure. It covers copy from the list, copy from the search
   box, copy from the row menu, the right-click selection, Tab, Escape and a
   600-byte profile name. CI runs no wine, so this script is local.
+- Windows app: a panic now shows its message in a message box and exits with
+  code 3. `win/src/crash.zig` wipes both plaintext buffers before the box
+  goes up, since the box waits for a click. The windows subsystem gives the
+  process no console, so every panic before this went unreported.
 - CI runs the Windows exe on both architectures it ships for.
   `windows-latest` covers `x86_64` and `windows-11-arm` covers `arm64`. Each
   job builds the app, launches it against the `fresh` fixture through

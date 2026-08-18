@@ -13,8 +13,16 @@ const cli = @import("args");
 const w = @import("win32.zig");
 const ids = @import("ids.zig");
 const clipboard = @import("clipboard.zig");
+const crash = @import("crash.zig");
 const model_mod = @import("model.zig");
 const text_mod = @import("text.zig");
+
+/// `win_exe.subsystem = .Windows` in build.zig sends Zig's default panic text
+/// to a stderr with no console. crash.zig shows it in a `MessageBoxW` instead.
+/// The compiler reads this declaration from the root source file alone, and
+/// build.zig roots model.zig, ids.zig and text.zig as their own test binaries,
+/// so it reaches the Windows exe and nothing else.
+pub const panic = std.debug.FullPanic(crash.report);
 
 const class_name = std.unicode.utf8ToUtf16LeStringLiteral("FirefoxPasswordViewWindow");
 const window_title = std.unicode.utf8ToUtf16LeStringLiteral("Firefox Password View");
@@ -218,6 +226,7 @@ fn windowProc(hwnd: w.HWND, message: w.UINT, wparam: w.WPARAM, lparam: w.LPARAM)
             const create: *const w.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
             const app: *App = @ptrCast(@alignCast(create.lpCreateParams.?));
             app.hwnd = hwnd;
+            crash.model = &app.model;
             _ = w.SetWindowLongPtrW(hwnd, w.GWLP_USERDATA, @bitCast(@intFromPtr(app)));
             createChildren(app, hwnd) catch return -1;
             return 0;

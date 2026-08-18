@@ -251,6 +251,20 @@ pub const Model = struct {
         self.revealed_index = null;
     }
 
+    /// Zeroes both plaintext buffers whole. crash.zig calls this from the
+    /// panic handler.
+    ///
+    /// `hideRevealed` and `clearCopy` slice by a stored length. A panic can
+    /// arrive with a length past 8192, and that slice panics again inside the
+    /// handler. This function reads no length.
+    pub fn wipeSecrets(self: *Model) void {
+        std.crypto.secureZero(u8, &self.reveal_buf);
+        std.crypto.secureZero(u8, &self.copy_buf);
+        self.revealed_len = 0;
+        self.revealed_index = null;
+        self.copy_len = 0;
+    }
+
     pub fn status(self: *const Model) []const u8 {
         return self.status_buf[0..self.status_len];
     }
@@ -404,6 +418,34 @@ test "clearCopy wipes the plaintext it handed the clipboard" {
 
     m.clearCopy();
     for (m.copy_buf[0..len]) |b| try testing.expectEqual(@as(u8, 0), b);
+}
+
+test "wipeSecrets clears both buffers whole and survives a length past the buffer" {
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    var m = testModel(&threaded);
+    defer m.deinit();
+    try openFixture(&m, "fresh");
+
+    try testing.expectEqual(Reveal.revealed, m.toggleReveal(0, false));
+    switch (m.requestCopy(0, false)) {
+        .copied => {},
+        else => return error.CopyFailed,
+    }
+    try testing.expect(m.revealed_len > 0);
+    try testing.expect(m.copy_len > 0);
+
+    // The panic this runs from can arrive mid-assignment, so both lengths
+    // carry a value no code path leaves behind.
+    m.revealed_len = m.reveal_buf.len + 4096;
+    m.copy_len = std.math.maxInt(usize);
+
+    m.wipeSecrets();
+    for (&m.reveal_buf) |b| try testing.expectEqual(@as(u8, 0), b);
+    for (&m.copy_buf) |b| try testing.expectEqual(@as(u8, 0), b);
+    try testing.expectEqual(@as(usize, 0), m.revealed_len);
+    try testing.expectEqual(@as(usize, 0), m.copy_len);
+    try testing.expect(m.revealed_index == null);
 }
 
 test "copying a 3DES row reports the error and copies nothing" {
