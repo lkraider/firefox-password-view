@@ -25,8 +25,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `core/testdata/page64k.db` and `core/testdata/reserved.db` cover the two
   header fields no `key4.db` exercises: a 65536-byte page, stored as the
   value 1 at header offset 16, and a 16-byte reserved tail on every page.
-  The reserved fixture is the one test that separates `usable` from
-  `page_size` in the payload arithmetic.
+  Replacing `usable` with `page_size` in `readPayload` fails the reserved
+  fixture and passes every other one.
 - `scripts/wine-check.sh` drives the Windows exe under wine and exits
   non-zero on a failure. It covers copy from the list, copy from the search
   box, copy from the row menu, the right-click selection, Tab, Escape and a
@@ -37,16 +37,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   process no console, so every panic before this went unreported.
 - CI runs the Windows exe on both architectures it ships for.
   `windows-latest` covers `x86_64` and `windows-11-arm` covers `arm64`. Each
-  job builds the app at `ReleaseSafe` for the `gnu` ABI the release ships,
+  job builds the app at `ReleaseSafe` for the `gnu` ABI a release ships,
   launches it against the `fresh` fixture through
-  `scripts/win-launch-check.ps1`, and asserts the process is alive and its
-  own window class is up. `windows-latest` also runs the core tests at
-  `ReleaseSafe`, the mode `scripts/package-release.sh` builds, beside the
-  Debug run on `macos-15`.
-- CI asserts that every build host produces the same Windows exe. Each build
-  job records its exe's SHA-256 in the run summary, and the `compare-sums` job
-  waits for all of them and compares one sum per target. `windows-latest` also
-  builds `x86_64` twice in parallel and fails when those two differ.
+  `scripts/win-launch-check.ps1`, and asserts the process is alive with its own
+  window class up. `windows-latest` also runs the core tests at `ReleaseSafe`,
+  the mode `scripts/package-release.sh` builds, and builds the exe twice in
+  parallel. Every build job records its exe's SHA-256 in the run summary, and
+  the `compare-sums` job compares one sum per target across the hosts.
 - `scripts/package-release.sh` starts both Windows builds beside the macOS
   chain, each with its own cache directory and install prefix. Two runs across
   a clean produced four identical artifacts, and every artifact matches what

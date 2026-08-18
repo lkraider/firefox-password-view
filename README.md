@@ -72,8 +72,8 @@ found, and `--profile <path>` opens one directory.
 | right-click | Reveal and Copy for the row under the cursor. |
 
 Passwords stay masked until you press `enter`, and only the selected one is
-shown. The macOS app shows the same data under the same rules, and each row
-there carries a copy button that leaves the row masked.
+shown. The macOS app shows the same data under the same rules. Each row there
+has a copy button, and the row stays masked when you use it.
 
 ## Limits
 
@@ -81,8 +81,8 @@ This reads a profile and writes nothing back. Firefox can stay open while
 you use it.
 
 The list is a snapshot from the moment you opened the profile. To pick up
-a login Firefox saved after that, open the profile again: the `Profile`
-menu on Windows, the profile picker on macOS, a restart for the TUI.
+a login Firefox saved after that, open the profile again. Windows has the
+`Profile` menu, macOS has the profile picker, and the TUI needs a restart.
 
 It cannot read these profiles:
 
@@ -144,8 +144,8 @@ zig build win -Dtarget=aarch64-windows-gnu -Doptimize=ReleaseSafe
 zig build win -Dtarget=x86_64-windows-gnu  -Doptimize=ReleaseSafe
 ```
 
-The released zips carry `ReleaseSafe`. That mode keeps the bounds and
-alignment checks that guard the hand-written `key4.db` reader.
+The released zips are built at `ReleaseSafe`. That mode keeps the bounds and
+alignment checks over the hand-written `key4.db` reader.
 
 `win/icon.ico` is committed, and a build reads that file. `python3
 scripts/make-ico.py` rewrites it from `macos/Icon.icns`.

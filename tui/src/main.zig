@@ -316,7 +316,7 @@ const Model = struct {
         ctx.consumeAndRedraw();
     }
 
-    /// Copies the row under the cursor, leaving it masked. `reveal_out`
+    /// Copies the row under the cursor. The row stays masked. `reveal_out`
     /// holds the plaintext for the two clipboard writes. A revealed row owns
     /// that buffer and wipes it in `hideRevealed`. Every other case wipes it
     /// here.

@@ -42,7 +42,7 @@ file now returns `error.QueryFailed` in 0.37 seconds.
 The budget bounds total reads at the page count times the cells one page
 holds. A 512-byte page holds at most 71 interior cells and a 4096-byte page at
 most 2044. `overflow.db` pushes 256 pages against a budget of 772.
-`core/testdata/fanout.db` is the fixture that reaches the budget.
+`core/testdata/fanout.db` reaches that budget.
 
 ### Two master keys, one key id
 
@@ -205,10 +205,10 @@ Both scripts create a wine prefix per run and call `wine-shutdown.sh` from
 their cleanup trap. `wineboot --init` starts `services.exe`, `explorer.exe`,
 `plugplay.exe`, `svchost.exe` and two `winedevice.exe` for the prefix. On wine
 11.15 under Rosetta 2 those keep running after `wineserver -k` and after the
-prefix directory is deleted, reparented to launchd. A run leaves 8 of them
-without this call, and they accumulate until the Mac reboots. Their argv names
-no prefix, so `wine-shutdown.sh` reads each candidate's cwd through `lsof` and
-kills the ones inside the prefix it was given.
+prefix directory is deleted, reparented to launchd. A run that skips the call
+leaves 8 of them, and they stay until the Mac reboots. Their argv holds a
+Windows path and names no prefix, so `wine-shutdown.sh` reads each candidate's
+cwd through `lsof` and kills the ones inside the prefix it was given.
 
 ### A panic on Windows shows a message box
 
@@ -253,7 +253,7 @@ thread.
 `core/test/smoke.c` calls every function in the header in order and runs as
 `zig build smoke`.
 
-### One open reads the disk, and nothing after it
+### Store.open is the one function that reads a file
 
 `Store.open` is the only function that touches a file. `keydb.load` opens
 `key4.db`, reads it and closes it before returning. `Store.open` then reads
@@ -268,9 +268,10 @@ already selected, and `selectProfile` in `AppModel.swift` builds a fresh
 store, so choosing the same profile reloads on both. The TUI opens once
 per run.
 
-`Store.open` landing while Firefox writes `key4.db` is the failure window,
-and the known limitation below covers it. That path returns `OpenFailed`
-or `Corrupt`, so a torn read reaches the front end as a message.
+A `Store.open` that lands while Firefox writes `key4.db` returns
+`OpenFailed` or `Corrupt`, so a torn read reaches the front end as a message.
+Reaching that state needs a write to a live profile, and the known
+limitations list records it as untested.
 
 The decryption modules call no OS-specific API. The macOS assumptions live
 in the front ends. `core.zig` and `tui/src/main.zig` build the profile
@@ -295,8 +296,9 @@ finds them:
 Both apps clear the clipboard 30 seconds after a copy, and both re-mask a
 revealed password on the same timer. Each reads the clipboard's serial
 number right after its own write and compares before it clears, so a copy
-another program made in between stays: `GetClipboardSequenceNumber` on
-Windows and `NSPasteboard.changeCount` on macOS. The TUI writes through
+another program made in between stays. The call is
+`GetClipboardSequenceNumber` on Windows and `NSPasteboard.changeCount` on
+macOS. The TUI writes through
 OSC 52 and `pbcopy` and arms no timer.
 
 ## Build and platform notes
@@ -311,20 +313,21 @@ from another host stays out of reach.
 
 Three build hosts produce the same Windows exe, and `ci.yml` asserts it. Each
 build job writes its exe's SHA-256 to the run summary and publishes it as a job
-output: `build-and-test` cross-compiles both targets on `macos-15`, the host
-`scripts/package-release.sh` runs on, `windows-test` builds `x86_64` twice in
-parallel on `windows-latest`, and `windows-arm-test` cross-compiles `arm64` on
-`windows-11-arm` through the emulated x86_64 toolchain. The `compare-sums` job
-waits for all three and runs `scripts/compare-sums.sh` once per target. An
-empty sum fails that job, since two missing values compare equal.
+output. `reproducible-build` records both targets on `macos-15`, from the exes
+`scripts/package-release.sh` put in the zips. `windows-test` builds `x86_64`
+twice in parallel on `windows-latest`. `windows-arm-test` cross-compiles
+`arm64` on `windows-11-arm` through the emulated x86_64 toolchain. The
+`compare-sums` job waits for all three and runs `scripts/compare-sums.sh` once
+per target. An empty sum fails that job, since two missing values compare
+equal.
 
 `windows-test` also fails when its own two builds disagree. `build.zig` pins
 the cpu to a baseline, so the target string decides the code generation on
 every host.
 
 Nothing else links a C library. `zig build -Dtarget=x86_64-windows-gnu`,
-`-Dtarget=aarch64-windows-gnu` and `-Dtarget=x86_64-linux-musl` all run on
-this Mac. `build.zig` names `user32`, `comctl32`, `gdi32`, `dwmapi`,
+`-Dtarget=aarch64-windows-gnu` and `-Dtarget=x86_64-linux-musl` all run on a
+macOS host. `build.zig` names `user32`, `comctl32`, `gdi32`, `dwmapi`,
 `uxtheme` and `advapi32`, and Zig links `kernel32` for every Windows
 target. Zig bundles a `.def` file for each one under
 `lib/libc/mingw/lib-common/` and generates the import library from it, so
@@ -362,9 +365,9 @@ dialog is active, and the frame's menu mnemonics then stop working.
 
 `TranslateAcceleratorW` matches whatever control holds the focus, so Ctrl+C
 over a selected search term used to copy the selected row's password. The
-`IDM_ROW_COPY` branch reads the HIWORD of `wParam`, which is 1 for an
-accelerator and 0 for a menu item, and sends `WM_COPY` to the search box in
-the accelerator case.
+HIWORD of `wParam` is 1 for an accelerator and 0 for a menu item. The
+`IDM_ROW_COPY` branch reads it and sends `WM_COPY` to the search box in the
+accelerator case.
 
 The `x86_64-windows-gnu` exe runs under wine on macOS.
 `scripts/screenshots.sh win` writes the README image there, and

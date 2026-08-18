@@ -26,7 +26,7 @@ pub const usage =
     \\  /            search, enter or escape leaves the field
     \\  up down k j  move through the list
     \\  enter        reveal the selected password, again to hide it
-    \\  y            copy the selected password, leaving it masked
+    \\  y            copy the selected password without revealing it
     \\  q ctrl-c     quit
     \\
 ;

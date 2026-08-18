@@ -136,7 +136,8 @@ else { exit(1) }
 ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
 
 // A title bar taller than a quarter of the window means the scan found
-// something else. Report that rather than write a cropped-up image.
+// something else. This exits 1 there. A cropped-up image would reach the
+// README with the fault invisible.
 let limit = h / 4
 var cut = -1
 for y in 0..<limit {
