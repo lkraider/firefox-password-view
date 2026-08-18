@@ -86,7 +86,9 @@ foreach ($b in $builds) {
 }
 if ($failed) { exit 1 }
 
-$exes = $builds | Where-Object { $_.out }
+# @() keeps one match an array. Where-Object returns the object itself for a
+# single match, and $exes[0] on an ordered dictionary looks up the key 0.
+$exes = @($builds | Where-Object { $_.out })
 foreach ($b in $exes) {
     $b.sum = Get-Sum $b
     Write-Host "$($b.name): $($b.sum)"
