@@ -6,7 +6,7 @@ cask "firefox-password-view" do
   # binary's UUID. CI is the machine whose build ships as the release
   # asset. Read the hash from ci.yml's reproducible-build job. That job
   # prints it on every push.
-  sha256 "0149ba84c26efc163d8dae03368d63407883d1fd6e5cdbbc02daa4d90875be90"
+  sha256 "f1e1c6ea762970aa86a8f858b3c33eab116bddb7537979617fe1014fd9640232"
 
   url "https://github.com/lkraider/firefox-password-view/releases/download/v#{version}/FirefoxPasswordView-#{version}-macos.zip"
   name "Firefox Password View"

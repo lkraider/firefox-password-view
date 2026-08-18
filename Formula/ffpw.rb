@@ -8,7 +8,7 @@ class Ffpw < Formula
   # binary's UUID. CI is the machine whose build ships as the release
   # asset. Read the hash from ci.yml's reproducible-build job. That job
   # prints it on every push.
-  sha256 "daaecd07ddf8a81396aaccb4c08c0fc547014acf160216c56d9e2778c14beb88"
+  sha256 "8aa2af400b31b710140986cedf6a394ab41a7cfc0b5e3ea80a47671b7da826fa"
   license "MIT"
 
   depends_on arch: :arm64
