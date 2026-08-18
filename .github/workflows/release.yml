@@ -16,6 +16,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The tag names the artifacts. macos/Info.plist holds the version the app
+      # reports. set-version.sh compares the tag with every such file.
+      - name: Check the tag against every file that holds the version
+        run: ./scripts/set-version.sh --check "${GITHUB_REF_NAME#v}"
+
       - name: Cache the pinned Zig toolchain
         id: zig-cache
         uses: actions/cache@v6
@@ -37,6 +42,22 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: shasum -a 256 * | tee SHA256SUMS
+
+      # Formula/ffpw.rb and Casks/firefox-password-view.rb hold a SHA-256 from a
+      # ci.yml run, committed before the tag. This job builds on a second
+      # macos-15 runner. A runner image with a newer macOS SDK writes a
+      # different LC_UUID, and the committed hash then misses these assets.
+      # A mismatch here exits before the upload, so brew reaches no release.
+      - name: Check the Homebrew hashes against these assets
+        working-directory: dist
+        run: |
+          tar_sum=$(awk '$2 == "ffpw-aarch64-macos.tar.gz" {print $1}' SHA256SUMS)
+          app_sum=$(awk '$2 ~ /-macos\.zip$/ {print $1}' SHA256SUMS)
+          # `grep -q ""` matches every file. awk returns an empty sum when an
+          # artifact name changes, so this test runs ahead of the greps.
+          [ -n "$tar_sum" ] && [ -n "$app_sum" ] || { echo "no macOS sum in SHA256SUMS" >&2; exit 1; }
+          grep -q "$tar_sum" ../Formula/ffpw.rb || { echo "Formula/ffpw.rb needs $tar_sum" >&2; exit 1; }
+          grep -q "$app_sum" ../Casks/firefox-password-view.rb || { echo "the cask needs $app_sum" >&2; exit 1; }
 
       - name: Create the GitHub release
         run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes

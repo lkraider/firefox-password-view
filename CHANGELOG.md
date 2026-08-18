@@ -48,6 +48,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   chain, each with its own cache directory and install prefix. Two runs across
   a clean produced four identical artifacts, and every artifact matches what
   the sequential script wrote.
+- The Windows exe reports its version in the Details tab of its Properties
+  dialog. `win/app.rc` holds a `VERSIONINFO` block, and that tab showed no
+  version before it.
+- `scripts/set-version.sh` writes the release version into every file that
+  holds it. `--check` compares them. `release.yml` runs that check against the
+  pushed tag. It then compares the hashes in `Formula/ffpw.rb` and
+  `Casks/firefox-password-view.rb` with the assets it packaged. A mismatch
+  exits the job before the upload.
 
 ### Changed
 

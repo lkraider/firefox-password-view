@@ -184,6 +184,7 @@ scripts/
   win-launch-check.ps1 launches the Windows exe on a CI runner
   win-build-hash.ps1   builds the Windows exe and records its SHA-256
   compare-sums.sh      asserts every build host recorded one sum per target
+  set-version.sh       writes the release version, or compares it with a tag
   winid.swift          lists every on-screen window and its bounds
   macinput.swift       posts synthetic mouse and keyboard events through CGEvent
   pixdiff.swift        counts differing pixels in one rectangle of two captures
@@ -435,7 +436,10 @@ no permission prompt.
   `LC_UUID`. Closing this needs the macOS SDK vendored into every build
   environment, as `zig-build-macos-sdk` does for Ghostty. Until then
   `Formula/ffpw.rb` and `Casks/firefox-password-view.rb` carry CI's hash,
-  printed by `ci.yml`'s `reproducible-build` job on every push.
+  printed by `ci.yml`'s `reproducible-build` job on every push. That hash
+  comes from one runner, and `release.yml` packages on another.
+  `release.yml` compares both hashes with the assets it packaged. A
+  mismatch exits the job before the upload.
 
 ## Prior art
 

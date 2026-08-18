@@ -30,9 +30,47 @@
 #define VK_RETURN 13
 #define VK_ESCAPE 27
 
+#define VS_VERSION_INFO 1
+#define VOS_NT_WINDOWS32 0x00040004L
+#define VFT_APP 0x00000001L
+
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
 
 IDI_APP ICON "icon.ico"
+
+/* The Details tab of the exe's Properties dialog reads this block, and showed
+   no version before it existed. scripts/set-version.sh writes the version
+   fields below. */
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 1,2,0,0
+PRODUCTVERSION 1,2,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE 0x0L
+{
+    BLOCK "StringFileInfo"
+    {
+        /* US English, Unicode. The VarFileInfo block below repeats the pair as
+           two numbers. */
+        BLOCK "040904b0"
+        {
+            VALUE "CompanyName", "Paul Eipper"
+            VALUE "FileDescription", "Firefox Password View"
+            VALUE "FileVersion", "1.2.0"
+            VALUE "InternalName", "FirefoxPasswordView"
+            VALUE "LegalCopyright", "Copyright (c) 2026 Paul Eipper. MIT License."
+            VALUE "OriginalFilename", "FirefoxPasswordView.exe"
+            VALUE "ProductName", "Firefox Password View"
+            VALUE "ProductVersion", "1.2.0"
+        }
+    }
+    BLOCK "VarFileInfo"
+    {
+        VALUE "Translation", 0x409, 1200
+    }
+}
 
 IDR_MAINMENU MENU
 {
