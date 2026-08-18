@@ -22,6 +22,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and through the system sqlite3, then compares every column, every rowid
   and the row order. `core/testdata/overflow.db` covers the overflow and
   interior-page branches no `key4.db` reaches.
+- `scripts/wine-check.sh` drives the Windows exe under wine and exits
+  non-zero on a failure. It covers copy from the list, copy from the search
+  box, copy from the row menu, the right-click selection, Tab, Escape and a
+  600-byte profile name. CI runs no wine, so this script is local.
 
 ### Changed
 
@@ -31,6 +35,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cross-compiles to Windows and Linux from a Mac.
 - `keydb.load` takes an `std.Io` and a plain path. Its error set is
   unchanged.
+- Windows app: `Ctrl+C` copies the search text while the search box holds
+  the focus. It copied the selected row's password before. The row context
+  menu and `Ctrl+C` over the list are unchanged.
+
+### Fixed
+
+- The SQLite reader followed a b-tree that reaches one page many times
+  until the caller gave up. A crafted 11,776-byte `key4.db` made
+  `keydb.load` run over 20 seconds with no return. One walk now descends
+  into at most as many pages as the file holds.
+- Windows app: a profile whose `profiles.ini` name runs past 511 characters
+  made the app exit with no window and no message. The conversion to UTF-16
+  panicked, and the windows subsystem sends a panic to a stderr with no
+  console.
+- Windows app: the status bar reported `Copied` for a copy the clipboard
+  refused. It now names the reason.
+- Windows app: `refreshRows` wrote past a zero-length slice when the arena
+  satisfied the first allocation and failed the second.
 
 ## [1.1.0] - 2026-08-17
 

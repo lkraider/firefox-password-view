@@ -159,13 +159,24 @@ build.zig
 tui/src/        the libvaxis TUI, imports store.zig through root.zig
 macos/          the SwiftUI app, a Swift package linking core.zig's static library
 win/src/        the Win32 app, importing the core module directly
+scripts/
+  screenshots.sh writes the three README images
+  wine-check.sh  asserts the Windows app's behaviour under wine
+  winid.swift    lists every on-screen window and its bounds
+  macinput.swift posts synthetic mouse and keyboard events through CGEvent
+  pixdiff.swift  counts differing pixels in one rectangle of two captures
 ```
 
 Inside `win/src/`, `model.zig` holds every rule about what a row shows and
 what an activation means. It imports `core` and `std` alone, so `zig build
 test` runs its tests on the build host. `main.zig` owns the window, the
 timers and the dialogs. `win32.zig` holds the externs and `clipboard.zig`
-the clipboard writer.
+the clipboard writer. `text.zig` converts UTF-8 into a caller-sized UTF-16
+buffer, and its tests run on the build host too.
+
+The three Swift files above are one-shot tools. `screenshots.sh` and
+`wine-check.sh` each compile the ones they need with `swiftc -O` into their
+own work directory.
 
 ## Linking the core from another front end
 
@@ -274,13 +285,33 @@ the search box and the list. Both carry `WS_TABSTOP`. The call runs after
 `WM_SETFOCUS` on the frame hands the focus to the search box. That covers
 the launch and a click on the frame.
 
-The `x86_64-windows-gnu` exe runs under wine on macOS, and
-`scripts/screenshots.sh win` drives it there. Measured under wine 11.15:
-the profile list, the search filter, reveal, copy, the 30-second clipboard
-clear, the 30-second re-mask, the account-row confirmation, the context
-menu, the `Profile` menu, the Primary Password dialog and the failure
-message box. Option+P under wine typed a literal `p` into the search box,
-so the menu mnemonics still need a Windows machine.
+The loop passes `WM_SYSKEYDOWN`, `WM_SYSKEYUP` and `WM_SYSCHAR` straight to
+`TranslateMessage`. `IsDialogMessage` swallows those three while a modeless
+dialog is active, and the frame's menu mnemonics then stop working.
+
+`TranslateAcceleratorW` matches whatever control holds the focus, so Ctrl+C
+over a selected search term used to copy the selected row's password. The
+`IDM_ROW_COPY` branch reads the HIWORD of `wParam`, which is 1 for an
+accelerator and 0 for a menu item, and sends `WM_COPY` to the search box in
+the accelerator case.
+
+The `x86_64-windows-gnu` exe runs under wine on macOS.
+`scripts/screenshots.sh win` writes the README image there, and
+`scripts/wine-check.sh` asserts behaviour and exits non-zero on a failure.
+Measured under wine 11.15: the profile list, the search filter, reveal,
+copy, the 30-second clipboard clear, the 30-second re-mask, the
+account-row confirmation, the context menu, the `Profile` menu, the
+Primary Password dialog and the failure message box.
+
+wine's Mac driver bridges the Win32 clipboard to `NSPasteboard` in
+`dlls/winemac.drv/clipboard.c`, so `pbpaste` reads what a copy put there.
+`pbpaste` reads plain text alone, and the four registered privacy formats
+never appear in it. comctl32 moves the list selection on `WM_RBUTTONDOWN`,
+so `showRowMenu` acts on the row the cursor is over.
+
+Option+P under wine typed a literal character into the search box, both
+through System Events and through a CGEvent carrying `.maskAlternate`. The
+menu mnemonics still need a Windows machine.
 
 macOS App Sandbox needs a per-run open panel before it allows reading
 another app's data directory. TCC leaves `~/Library/Application Support`
