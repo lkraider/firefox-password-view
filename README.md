@@ -100,11 +100,24 @@ Copying marks the clipboard entry `org.nspasteboard.ConcealedType` on macOS.
 On Windows it sets `ExcludeClipboardContentFromMonitorProcessing`,
 `CanIncludeInClipboardHistory`, `CanUploadToCloudClipboard` and
 `Clipboard Viewer Ignore`. Those four formats keep the password out of
-`Win+V` history and out of the cloud clipboard. Both platforms clear the clipboard 30 seconds
-later, and a copy someone else made in between survives. Copying never puts
-the password on screen. In the macOS app and in the Windows app a revealed
-password masks itself after the same 30 seconds. There are no network calls
-and no telemetry.
+`Win+V` history and out of the cloud clipboard. Copying never puts the
+password on screen. There are no network calls and no telemetry.
+
+The macOS app and the Windows app share one 30-second rule:
+
+| After 30 seconds | macOS app | Windows app | TUI |
+|---|---|---|---|
+| A copied password leaves the clipboard | yes | yes | stays |
+| A revealed password masks itself | yes | yes | stays |
+
+Each app records the clipboard's change count when it copies, and clears
+only while that number still matches. A copy someone else made in the
+meantime survives. macOS reads `NSPasteboard.changeCount` and Windows
+reads `GetClipboardSequenceNumber`.
+
+The TUI writes through OSC 52 and `pbcopy`. The password stays on the
+clipboard until something else replaces it, and a revealed row stays open
+until you press `enter` again.
 
 Anyone who can read your files or your memory already has this data.
 `key4.db` is readable by your own user, and Firefox exposes the same
