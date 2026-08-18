@@ -556,8 +556,11 @@ fn fillRow(app: *App, info: *w.NMLVDISPINFOW) void {
     }
 }
 
-fn pointerInto(list: [][:0]u16, row: usize) ?w.LPWSTR {
-    if (row >= list.len) return null;
+/// The list draws whatever `pszText` names. A null there for an LVIF_TEXT
+/// request sends comctl32 to address 0, so a row past the slice gets the
+/// empty string.
+fn pointerInto(list: [][:0]u16, row: usize) w.LPWSTR {
+    if (row >= list.len) return @ptrCast(&empty_wide);
     return @ptrCast(list[row].ptr);
 }
 
@@ -570,7 +573,9 @@ fn refreshRows(app: *App) void {
 
     app.hostnames = arena.alloc([:0]u16, count) catch &.{};
     app.usernames = arena.alloc([:0]u16, count) catch &.{};
-    for (0..@min(count, app.hostnames.len)) |row| {
+    // The arena can satisfy the first alloc and fail the second, so the loop
+    // takes the shorter of the two.
+    for (0..@min(app.hostnames.len, app.usernames.len)) |row| {
         const entry = app.model.entryAt(row) orelse continue;
         app.hostnames[row] = std.unicode.utf8ToUtf16LeAllocZ(arena, entry.hostname) catch &empty_wide;
         app.usernames[row] = std.unicode.utf8ToUtf16LeAllocZ(arena, entry.username) catch &empty_wide;
