@@ -10,6 +10,9 @@
 # is parked on a modal dialog. On a session with no interactive desktop,
 # MessageBoxW with a null owner returns 0 at once and the app exits 1, so the
 # liveness check catches a startup failure either way.
+#
+# Both GitHub-hosted Windows runners draw a window for a process launched this
+# way, so a missing window fails the run.
 [CmdletBinding()]
 param(
     [string]$Exe = "zig-out\bin\FirefoxPasswordView.exe",
@@ -90,9 +93,11 @@ try {
     } elseif ($classes -contains "FirefoxPasswordViewWindow") {
         Write-Host "PASS  the app's own window is up. Classes: $($classes -join ', ')"
     } else {
-        # This branch says the runner gives a launched process no desktop to
-        # draw on. Tighten the check to a failure once one run reports it.
-        Write-Host "WARN  no window of any class within 15 seconds. The process is alive."
+        # Both hosted runners draw the window. Measured on windows-latest and
+        # on windows-11-arm: the process owns FirefoxPasswordViewWindow,
+        # tooltips_class32, IME and MSCTFIME UI within 15 seconds.
+        Write-Host "FAIL  no window of any class within 15 seconds. The process is alive."
+        $code = 1
     }
 
     if ($proc.HasExited) {
