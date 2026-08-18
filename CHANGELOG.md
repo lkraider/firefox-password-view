@@ -45,6 +45,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   made the app exit with no window and no message. The conversion to UTF-16
   panicked, and the windows subsystem sends a panic to a stderr with no
   console.
+- `scripts/wine-check.sh` and `scripts/screenshots.sh` left 8 wine helper
+  processes running per run. `wineboot` starts them, they survive
+  `wineserver -k` and the prefix's deletion, and launchd adopts them. Both
+  scripts now call `scripts/wine-shutdown.sh` from their cleanup trap.
 - Windows app: the status bar reported `Copied` for a copy the clipboard
   refused. It now names the reason.
 - Windows app: `refreshRows` wrote past a zero-length slice when the arena

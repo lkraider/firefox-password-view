@@ -160,11 +160,12 @@ tui/src/        the libvaxis TUI, imports store.zig through root.zig
 macos/          the SwiftUI app, a Swift package linking core.zig's static library
 win/src/        the Win32 app, importing the core module directly
 scripts/
-  screenshots.sh writes the three README images
-  wine-check.sh  asserts the Windows app's behaviour under wine
-  winid.swift    lists every on-screen window and its bounds
-  macinput.swift posts synthetic mouse and keyboard events through CGEvent
-  pixdiff.swift  counts differing pixels in one rectangle of two captures
+  screenshots.sh       writes the three README images
+  wine-check.sh        asserts the Windows app's behaviour under wine
+  wine-shutdown.sh     ends a wine prefix's session and kills its helpers
+  winid.swift          lists every on-screen window and its bounds
+  macinput.swift       posts synthetic mouse and keyboard events through CGEvent
+  pixdiff.swift        counts differing pixels in one rectangle of two captures
 ```
 
 Inside `win/src/`, `model.zig` holds every rule about what a row shows and
@@ -177,6 +178,15 @@ buffer, and its tests run on the build host too.
 The three Swift files above are one-shot tools. `screenshots.sh` and
 `wine-check.sh` each compile the ones they need with `swiftc -O` into their
 own work directory.
+
+Both scripts create a wine prefix per run and call `wine-shutdown.sh` from
+their cleanup trap. `wineboot --init` starts `services.exe`, `explorer.exe`,
+`plugplay.exe`, `svchost.exe` and two `winedevice.exe` for the prefix. On wine
+11.15 under Rosetta 2 those keep running after `wineserver -k` and after the
+prefix directory is deleted, reparented to launchd. A run leaves 8 of them
+without this call, and they accumulate until the Mac reboots. Their argv names
+no prefix, so `wine-shutdown.sh` reads each candidate's cwd through `lsof` and
+kills the ones inside the prefix it was given.
 
 ## Linking the core from another front end
 

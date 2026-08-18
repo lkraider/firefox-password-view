@@ -56,6 +56,9 @@ cleanup() {
     pkill -f "$app_bundle/Contents/MacOS/FirefoxPasswordView" 2>/dev/null || true
     pkill -f "$tui_bin" 2>/dev/null || true
     pkill -f "FirefoxPasswordView.exe" 2>/dev/null || true
+    # wineboot starts 8 helper processes for the prefix below, and they outlive
+    # both the exe and the prefix directory.
+    "$repo_root/scripts/wine-shutdown.sh" "$work/wine" "$wine" 2>/dev/null || true
     close_shot_windows
     rm -rf "$work"
 }
