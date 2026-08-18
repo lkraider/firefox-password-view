@@ -22,7 +22,6 @@ pub const WCHAR = u16;
 // an odd resource id such as IDI_APP = 1.
 pub const LPCWSTR = [*:0]align(1) const WCHAR;
 pub const LPWSTR = [*:0]WCHAR;
-pub const COLORREF = DWORD;
 
 pub const UINT_PTR = usize;
 pub const ULONG_PTR = usize;
@@ -210,7 +209,6 @@ pub const WS_CLIPCHILDREN: DWORD = 0x02000000;
 pub const WS_EX_CLIENTEDGE: DWORD = 0x00000200;
 pub const CW_USEDEFAULT: c_int = @bitCast(@as(u32, 0x80000000));
 pub const SW_SHOWNORMAL: c_int = 1;
-pub const COLOR_WINDOW: c_int = 5;
 pub const COLOR_BTNFACE: c_int = 15;
 pub const GWLP_USERDATA: c_int = -21;
 pub const IDC_ARROW: u16 = 32512;
@@ -220,12 +218,7 @@ pub const WM_CREATE: UINT = 0x0001;
 pub const WM_DESTROY: UINT = 0x0002;
 pub const WM_SIZE: UINT = 0x0005;
 pub const WM_SETFOCUS: UINT = 0x0007;
-pub const WM_CLOSE: UINT = 0x0010;
-pub const WM_SETTINGCHANGE: UINT = 0x001A;
 pub const WM_SETFONT: UINT = 0x0030;
-pub const WM_GETTEXT: UINT = 0x000D;
-pub const WM_GETTEXTLENGTH: UINT = 0x000E;
-pub const WM_SETTEXT: UINT = 0x000C;
 pub const WM_SYSKEYDOWN: UINT = 0x0104;
 pub const WM_SYSKEYUP: UINT = 0x0105;
 pub const WM_SYSCHAR: UINT = 0x0106;
@@ -242,7 +235,6 @@ pub const EN_CHANGE: WORD = 0x0300;
 
 // Edit control.
 pub const ES_AUTOHSCROLL: DWORD = 0x0080;
-pub const ES_PASSWORD: DWORD = 0x0020;
 pub const ECM_FIRST: UINT = 0x1500;
 pub const EM_SETCUEBANNER: UINT = ECM_FIRST + 1;
 pub const EM_SETSEL: UINT = 0x00B1;
@@ -258,10 +250,7 @@ pub const LVS_EX_DOUBLEBUFFER: DWORD = 0x00010000;
 
 pub const LVM_FIRST: UINT = 0x1000;
 pub const LVM_GETNEXTITEM: UINT = LVM_FIRST + 12;
-pub const LVM_ENSUREVISIBLE: UINT = LVM_FIRST + 19;
 pub const LVM_REDRAWITEMS: UINT = LVM_FIRST + 21;
-pub const LVM_SETCOLUMNWIDTH: UINT = LVM_FIRST + 30;
-pub const LVM_SETITEMSTATE: UINT = LVM_FIRST + 43;
 pub const LVM_SETITEMCOUNT: UINT = LVM_FIRST + 47;
 pub const LVM_SETEXTENDEDLISTVIEWSTYLE: UINT = LVM_FIRST + 54;
 pub const LVM_INSERTCOLUMNW: UINT = LVM_FIRST + 97;
@@ -271,8 +260,6 @@ pub const LVCF_WIDTH: UINT = 0x0002;
 pub const LVCF_TEXT: UINT = 0x0004;
 pub const LVCF_SUBITEM: UINT = 0x0008;
 pub const LVNI_SELECTED: UINT = 0x0002;
-pub const LVIS_FOCUSED: UINT = 0x0001;
-pub const LVIS_SELECTED: UINT = 0x0002;
 pub const LVSICF_NOSCROLL: UINT = 0x0002;
 
 /// Notification codes arrive as a UINT holding a negative number.
@@ -291,7 +278,6 @@ pub const ICC_LISTVIEW_CLASSES: DWORD = 0x00000001;
 pub const ICC_BAR_CLASSES: DWORD = 0x00000004;
 
 // Menus.
-pub const MIIM_STATE: UINT = 0x00000001;
 pub const MIIM_ID: UINT = 0x00000002;
 pub const MIIM_STRING: UINT = 0x00000040;
 pub const MIIM_FTYPE: UINT = 0x00000100;
@@ -310,7 +296,6 @@ pub const MB_ICONWARNING: UINT = 0x00000030;
 pub const IDOK: c_int = 1;
 pub const IDCANCEL: c_int = 2;
 pub const IDYES: c_int = 6;
-pub const IDNO: c_int = 7;
 
 // Clipboard.
 pub const CF_UNICODETEXT: UINT = 13;
@@ -318,7 +303,6 @@ pub const GMEM_MOVEABLE: UINT = 0x0002;
 
 // Fonts and DPI.
 pub const SPI_GETNONCLIENTMETRICS: UINT = 0x0029;
-pub const USER_DEFAULT_SCREEN_DPI: UINT = 96;
 pub const SWP_NOZORDER: UINT = 0x0004;
 pub const SWP_NOACTIVATE: UINT = 0x0010;
 
@@ -429,12 +413,4 @@ pub fn commandId(wParam: WPARAM) u16 {
 /// code.
 pub fn commandCode(wParam: WPARAM) u16 {
     return @truncate(wParam >> 16);
-}
-
-pub fn loWord(value: anytype) u16 {
-    return @truncate(@as(usize, @bitCast(@as(isize, @intCast(value)))));
-}
-
-pub fn hiWord(value: anytype) u16 {
-    return @truncate(@as(usize, @bitCast(@as(isize, @intCast(value)))) >> 16);
 }
