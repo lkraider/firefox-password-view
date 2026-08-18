@@ -17,7 +17,10 @@ pub const DWORD = u32;
 pub const LONG = i32;
 pub const UINT = c_uint;
 pub const WCHAR = u16;
-pub const LPCWSTR = [*:0]const WCHAR;
+// align(1) because intResource below builds one of these out of a small
+// integer. A u16 pointer wants a 2-byte alignment, and @ptrFromInt panics on
+// an odd resource id such as IDI_APP = 1.
+pub const LPCWSTR = [*:0]align(1) const WCHAR;
 pub const LPWSTR = [*:0]WCHAR;
 pub const COLORREF = DWORD;
 
