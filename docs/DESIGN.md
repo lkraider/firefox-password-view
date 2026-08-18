@@ -184,11 +184,51 @@ thread.
 `core/test/smoke.c` calls every function in the header in order and runs as
 `zig build smoke`.
 
+### One open reads the disk, and nothing after it
+
+`Store.open` is the only function that touches a file. `keydb.load` opens
+`key4.db`, reads it and closes it before returning. `Store.open` then reads
+all of `logins.json` into the arena and closes that too. `Store.reveal`
+decrypts from the SDR blob and the master key already in the arena.
+
+An open profile is therefore a snapshot. Firefox may rewrite either file
+while a front end holds a `Store`, and the entry list stays as it was. A
+login saved after the open appears when the front end calls `Store.open`
+again. `switchProfile` in `win/src/main.zig` calls it for the profile
+already selected, and `selectProfile` in `AppModel.swift` builds a fresh
+store, so choosing the same profile reloads on both. The TUI opens once
+per run.
+
+`Store.open` landing while Firefox writes `key4.db` is the failure window,
+and the known limitation below covers it. That path returns `OpenFailed`
+or `Corrupt`, so a torn read reaches the front end as a message.
+
 The decryption modules call no OS-specific API. The macOS assumptions live
 in the front ends. `core.zig` and `tui/src/main.zig` build the profile
 directory as `$HOME/Library/Application Support/Firefox`, and
 `tui/src/main.zig` copies by running `pbcopy`. `win/src/main.zig` builds
 `%APPDATA%\Mozilla\Firefox` and copies through `SetClipboardData`.
+
+Each platform marks a copied password so a clipboard manager skips it.
+macOS writes the `org.nspasteboard.ConcealedType` pasteboard type.
+`win/src/clipboard.zig` registers four formats and writes all four ahead of
+`CF_UNICODETEXT`, so a monitor reading the moment the text lands already
+finds them:
+
+- `CanIncludeInClipboardHistory` and `CanUploadToCloudClipboard` take a
+  DWORD 0. These are Windows' own opt-outs for `Win+V` history and for the
+  cloud clipboard.
+- `ExcludeClipboardContentFromMonitorProcessing` takes any value. A monitor
+  that finds it leaves the copy alone.
+- `Clipboard Viewer Ignore` is the convention third-party managers honoured
+  before Windows 10 named its own.
+
+Both apps clear the clipboard 30 seconds after a copy, and both re-mask a
+revealed password on the same timer. Each reads the clipboard's serial
+number right after its own write and compares before it clears, so a copy
+another program made in between stays: `GetClipboardSequenceNumber` on
+Windows and `NSPasteboard.changeCount` on macOS. The TUI writes through
+OSC 52 and `pbcopy` and arms no timer.
 
 ## Build and platform notes
 

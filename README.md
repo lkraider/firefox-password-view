@@ -77,14 +77,12 @@ there carries a copy button that leaves the row masked.
 
 ## Limits
 
-This reads a profile and writes nothing back. `core/src/sqlitedb.zig` opens
-`key4.db` read-only and reads the SQLite file format directly, so it runs
-while Firefox has the profile open.
+This reads a profile and writes nothing back. Firefox can stay open while
+you use it.
 
-It reads `key4.db` and `logins.json` once at open and closes both. The list
-is a snapshot from that moment. A login Firefox saves later appears when
-you open the profile again: the `Profile` menu on Windows, the profile
-picker on macOS, a restart for the TUI.
+The list is a snapshot from the moment you opened the profile. To pick up
+a login Firefox saved after that, open the profile again: the `Profile`
+menu on Windows, the profile picker on macOS, a restart for the TUI.
 
 It cannot read these profiles:
 
@@ -93,29 +91,23 @@ It cannot read these profiles:
 - One that Firefox 144 or newer has never opened. Those hold
   3DES-encrypted entries only. This tool reports 3DES per entry and stops
   there.
-- One whose `key4.db` uses SQLite's write-ahead log. The file header names
-  the journal mode. Every profile measured names the rollback journal, and
-  the reader reads that format. A write-ahead log stops it with
-  `WalJournal`.
+- One whose `key4.db` uses SQLite's write-ahead log. No Firefox profile
+  measured uses one. A profile that does stops the app with `WalJournal`.
 
 ## Security
 
-Copying marks the clipboard entry `org.nspasteboard.ConcealedType` on macOS.
-On Windows it sets `ExcludeClipboardContentFromMonitorProcessing`,
-`CanIncludeInClipboardHistory`, `CanUploadToCloudClipboard` and
-`Clipboard Viewer Ignore`. Those four formats keep the password out of
-`Win+V` history and out of the cloud clipboard. Copying never puts the
-password on screen. There are no network calls and no telemetry.
+Copying marks the clipboard entry so a clipboard manager skips it. On
+Windows that keeps the password out of `Win+V` history and out of the
+cloud clipboard. Copying never puts the password on screen. There are no
+network calls and no telemetry.
 
 The macOS app and the Windows app clear the clipboard 30 seconds after a
-copy. Both mask a revealed password after the same 30 seconds. Each one
-records the clipboard's serial number when it copies. It clears only while
-that number still matches, so a copy someone else made in between
-survives.
+copy. Both mask a revealed password after the same 30 seconds. Copy
+something else in the meantime and that copy stays.
 
-The TUI writes through OSC 52 and `pbcopy`, and it runs no timer. The
-password stays on the clipboard until something else replaces it. A
-revealed row stays open until you press `enter` again.
+The TUI runs no timer. A password it copies stays on the clipboard until
+something else replaces it, and a revealed row stays open until you press
+`enter` again.
 
 Anyone who can read your files or your memory already has this data.
 `key4.db` is readable by your own user, and Firefox exposes the same
