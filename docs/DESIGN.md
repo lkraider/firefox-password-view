@@ -163,6 +163,7 @@ scripts/
   screenshots.sh       writes the three README images
   wine-check.sh        asserts the Windows app's behaviour under wine
   wine-shutdown.sh     ends a wine prefix's session and kills its helpers
+  win-launch-check.ps1 launches the Windows exe on a CI runner
   winid.swift          lists every on-screen window and its bounds
   macinput.swift       posts synthetic mouse and keyboard events through CGEvent
   pixdiff.swift        counts differing pixels in one rectangle of two captures
