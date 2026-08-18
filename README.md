@@ -137,9 +137,12 @@ SQLite reader against the system sqlite3.
 The Windows app cross-compiles from macOS or Linux with no Windows SDK:
 
 ```
-zig build win -Dtarget=aarch64-windows-gnu -Doptimize=ReleaseSmall
-zig build win -Dtarget=x86_64-windows-gnu  -Doptimize=ReleaseSmall
+zig build win -Dtarget=aarch64-windows-gnu -Doptimize=ReleaseSafe
+zig build win -Dtarget=x86_64-windows-gnu  -Doptimize=ReleaseSafe
 ```
+
+`ReleaseSafe` is the mode the released zips ship. It keeps the bounds and
+alignment checks that guard the hand-written `key4.db` reader.
 
 `python3 scripts/make-ico.py` regenerates `win/icon.ico` from the committed
 macOS artwork. The `.ico` is committed, so a build needs neither that script

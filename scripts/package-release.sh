@@ -28,11 +28,17 @@ ditto -c -k --keepParent \
 # The Windows builds come last, because each one overwrites zig-out and the
 # macOS app links zig-out/lib/libffpw.a.
 #
+# ReleaseSafe keeps the bounds, alignment and overflow checks. sqlitedb.zig
+# reads every offset in key4.db out of the file itself, and logins.json and
+# the SDR blobs arrive the same way. A bad offset panics under these checks.
+# The macOS artifacts above use ReleaseSafe for the same reason. ReleaseSmall
+# drops the checks and writes a zip 81 KB smaller.
+#
 # -X drops the extra attributes zip stores per entry, and the touch in the
 # loop fixes the entry's mtime. Two runs then write the same bytes.
 for pair in "x86_64-windows-gnu x86_64" "aarch64-windows-gnu arm64"; do
     set -- $pair
-    (cd "$repo_root" && "$zig" build -Dtarget="$1" -Doptimize=ReleaseSmall)
+    (cd "$repo_root" && "$zig" build -Dtarget="$1" -Doptimize=ReleaseSafe)
     touch -t 202601010000 "$repo_root/zig-out/bin/FirefoxPasswordView.exe"
     rm -f "$out/FirefoxPasswordView-${version}-windows-$2.zip"
     (cd "$repo_root/zig-out/bin" && zip -X -q -9 \

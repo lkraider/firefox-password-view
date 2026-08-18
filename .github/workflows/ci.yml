@@ -53,10 +53,12 @@ jobs:
         run: ./scripts/bundle.sh
 
       - name: Cross-compile every shipped target
+        # ReleaseSafe matches scripts/package-release.sh, so this step compiles
+        # the code the released zips carry.
         run: |
           for target in x86_64-windows-gnu aarch64-windows-gnu x86_64-linux-musl; do
             ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build \
-              -Dtarget="$target" -Doptimize=ReleaseSmall
+              -Dtarget="$target" -Doptimize=ReleaseSafe
           done
 
   windows-test:
