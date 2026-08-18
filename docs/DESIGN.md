@@ -141,7 +141,7 @@ confirms the Primary Password before any key material is unwrapped.
 | 3DES | Not implemented. `sdr.decrypt` returns `LegacyTripleDes` | A DES implementation adds roughly 300 lines of legacy cipher that 0 of 1701 entries need |
 | DER | Own bounds-checked reader | `std.crypto.Certificate.der` has no bounds checks, no canonical-form checks and no tests (ziglang/zig#19775) |
 | C interop | `b.addTranslateC` | `@cImport` is deprecated in Zig 0.16 |
-| SQLite | `core/src/sqlitedb.zig`, a read-only reader for the file format | The vendored amalgamation needs libc. Three exes at `-Doptimize=ReleaseSmall` on `x86_64-windows-gnu`: 803840 bytes with the amalgamation, 64000 for a minimal one linking libc, 4608 for a minimal one without it. SQLite's CVE advisories also cover a SQL layer this reader never calls |
+| SQLite | `core/src/sqlitedb.zig`, a read-only reader for the file format | The vendored amalgamation needs libc. Three exes at `-Doptimize=ReleaseSmall` on `x86_64-windows-gnu`, measured against the 3.53.4 amalgamation: 803840 bytes with it, 64000 for a minimal one linking libc, 4608 for a minimal one without it. SQLite's CVE advisories also cover a SQL layer this reader never calls |
 | Win32 | Hand-written externs in `win/src/win32.zig` | `zigwin32` is a generated source tree of about 300 MB |
 | Windows UI | Windows mechanisms for every macOS feature: a `Profile` menu, a context menu, `MessageBoxW`, a `DIALOGEX` template | Porting a SwiftUI layout puts macOS interactions in a Windows app |
 | Windows optimize mode | `ReleaseSafe` for both released zips | `ReleaseSmall` saves 81 KB in the zip and drops the bounds, alignment and overflow checks. `sqlitedb.zig` takes every offset it follows from the file it reads |
