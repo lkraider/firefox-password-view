@@ -4,13 +4,9 @@
 const std = @import("std");
 
 pub const Options = struct {
-    /// The profile directory to open. A relative path joins onto the root.
-    /// Null means read profiles.ini and take the pick
-    /// `profiles.resolveDefault` returns.
+    /// The profile directory to open. Null means read profiles.ini and take
+    /// the pick `profiles.resolveDefault` returns.
     profile_path: ?[]const u8 = null,
-    /// The directory holding profiles.ini. Null means walk
-    /// `profiles.home_relative_dirs`.
-    profiles_dir: ?[]const u8 = null,
     list_profiles: bool = false,
     help: bool = false,
 };
@@ -21,12 +17,10 @@ pub const usage =
     \\ffpw -- view a local Firefox profile's saved logins
     \\
     \\Usage:
-    \\  ffpw                       open the profile Firefox uses
-    \\  ffpw --profile <path>      open the profile in <path>, joined onto
-    \\                             the root when it is relative
-    \\  ffpw --profiles-dir <dir>  read profiles.ini from <dir>
-    \\  ffpw --list-profiles       print every profile in profiles.ini
-    \\  ffpw --help                print this text
+    \\  ffpw                     open the profile Firefox uses
+    \\  ffpw --profile <path>    open the profile in <path>
+    \\  ffpw --list-profiles     print every profile in profiles.ini
+    \\  ffpw --help              print this text
     \\
     \\Keys:
     \\  /            search, enter or escape leaves the field
@@ -59,14 +53,6 @@ pub fn parse(argv: []const []const u8) Error!Options {
             const value = arg["--profile=".len..];
             if (value.len == 0) return error.MissingValue;
             options.profile_path = value;
-        } else if (std.mem.eql(u8, arg, "--profiles-dir")) {
-            i += 1;
-            if (i >= argv.len) return error.MissingValue;
-            options.profiles_dir = argv[i];
-        } else if (std.mem.startsWith(u8, arg, "--profiles-dir=")) {
-            const value = arg["--profiles-dir=".len..];
-            if (value.len == 0) return error.MissingValue;
-            options.profiles_dir = value;
         } else {
             return error.UnknownFlag;
         }
@@ -77,7 +63,6 @@ pub fn parse(argv: []const []const u8) Error!Options {
 test "no arguments leaves every field at its default" {
     const options = try parse(&.{});
     try std.testing.expect(options.profile_path == null);
-    try std.testing.expect(options.profiles_dir == null);
     try std.testing.expect(!options.list_profiles);
     try std.testing.expect(!options.help);
 }
@@ -95,27 +80,6 @@ test "--profile=<path> takes the value after the equals sign" {
 test "--profile with nothing after it reports MissingValue" {
     try std.testing.expectError(error.MissingValue, parse(&.{"--profile"}));
     try std.testing.expectError(error.MissingValue, parse(&.{"--profile="}));
-}
-
-test "--profiles-dir takes the next argument" {
-    const options = try parse(&.{ "--profiles-dir", "/tmp/ff" });
-    try std.testing.expectEqualStrings("/tmp/ff", options.profiles_dir.?);
-}
-
-test "--profiles-dir=<dir> takes the value after the equals sign" {
-    const options = try parse(&.{"--profiles-dir=/tmp/ff"});
-    try std.testing.expectEqualStrings("/tmp/ff", options.profiles_dir.?);
-}
-
-test "--profiles-dir with nothing after it reports MissingValue" {
-    try std.testing.expectError(error.MissingValue, parse(&.{"--profiles-dir"}));
-    try std.testing.expectError(error.MissingValue, parse(&.{"--profiles-dir="}));
-}
-
-test "--profiles-dir and --profile set separate fields" {
-    const options = try parse(&.{ "--profiles-dir", "/tmp/ff", "--profile", "Profiles/p" });
-    try std.testing.expectEqualStrings("/tmp/ff", options.profiles_dir.?);
-    try std.testing.expectEqualStrings("Profiles/p", options.profile_path.?);
 }
 
 test "--list-profiles and --help set their flags" {

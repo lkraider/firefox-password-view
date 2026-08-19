@@ -6,7 +6,7 @@
 # The copy path needs a `y` press. libvaxis reads keys from /dev/tty, so a
 # pipe on stdin reaches nothing. Driving that path needs a pty writer.
 #
-# The roots below repeat core/src/profiles.zig's home_relative_dirs. Case 5
+# The roots below repeat core/src/profiles.zig's home_relative_dirs. Case 4
 # reads the error message. That message prints home_relative_dirs. An edit to
 # either list fails this script.
 set -eu
@@ -72,25 +72,20 @@ HOME="$home" "$ffpw" --list-profiles > "$tmp/out" 2> "$tmp/err" \
 grep -qx "$home/.mozilla/firefox" "$tmp/err" || fail "two roots: took $(cat "$tmp/err")"
 finish "the first populated root wins"
 
-# 3. --profiles-dir overrides the walk.
+# 3. --profile names a profile directory, so the run reads no profiles.ini and
+# skips the walk. A machine carrying no Firefox install serves this case.
+# Reaching the UI needs a pty, so this reads the error text alone.
 begin
-snap="$home/snap/firefox/common/.mozilla/firefox"
-HOME="$home" "$ffpw" --profiles-dir "$snap" --list-profiles > "$tmp/out" 2> "$tmp/err" \
-    || fail "--profiles-dir exited non-zero"
-grep -qx "$snap" "$tmp/err" || fail "--profiles-dir: took $(cat "$tmp/err")"
-grep -q "^default-release	$snap/Profiles/real.default-release$" "$tmp/out" \
-    || fail "--profiles-dir: stdout carried no snap-rooted path"
-finish "--profiles-dir names the root"
+bare="$tmp/no-firefox"
+mkdir -p "$bare"
+HOME="$bare" "$ffpw" --profile "$fixture/Profiles/real.default-release" \
+    > "$tmp/out" 2> "$tmp/err" || true
+if grep -q "found no profiles.ini" "$tmp/err"; then
+    fail "--profile walked the roots: $(cat "$tmp/err")"
+fi
+finish "--profile opens a directory with no root present"
 
-# 4. Both flags parse in one run. --list-profiles reads no --profile, so this
-# covers the parser and the exit code.
-begin
-HOME="$home" "$ffpw" --profiles-dir "$snap" --profile Profiles/real.default-release \
-    --list-profiles > "$tmp/out" 2>/dev/null \
-    || fail "--profiles-dir with --profile exited non-zero"
-finish "--profiles-dir and --profile parse together"
-
-# 5. An empty HOME. The message names every path the walk tried.
+# 4. An empty HOME. The message names every path the walk tried.
 begin
 empty="$tmp/empty"
 mkdir -p "$empty"
@@ -102,10 +97,10 @@ for rel in $roots; do
 done
 finish "the error names every path searched"
 
-# 6. --help.
+# 5. --help.
 begin
 "$ffpw" --help > "$tmp/out" 2>&1 || fail "--help exited non-zero"
-grep -q -- "--profiles-dir" "$tmp/out" || fail "--help omits --profiles-dir"
+grep -q -- "--profile" "$tmp/out" || fail "--help omits --profile"
 finish "--help prints the usage text"
 
 [ "$failures" -eq 0 ] || { echo "$failures checks failed"; exit 1; }

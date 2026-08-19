@@ -285,7 +285,7 @@ program and `win/src/main.zig` copies through `SetClipboardData`.
 A root is the directory holding `profiles.ini` and the profile folders it
 names. `profiles.home_relative_dirs` lists the roots for the host it
 compiles for, each relative to `$HOME`. macOS has one,
-`Library/Application Support/Firefox`. Linux has three:
+`Library/Application Support/Firefox`. Linux has these:
 
     .mozilla/firefox
     snap/firefox/common/.mozilla/firefox
@@ -299,15 +299,11 @@ the snap Firefox cannot see `~/.mozilla/firefox`. Reading every root and
 merging the lists would print one list mixing two installs, and `--profile`
 could then name a profile the running Firefox cannot open.
 
-`--profiles-dir <dir>` names a root and skips the walk. Firefox's own
-`-profile <path>` names a profile directory, and this project's `--profile`
-matches it. Firefox has no flag for the container. In `about:profiles` the
-label "Root Directory" names the profile folder, so `--profile-root` would
-carry Firefox's meaning for a different thing.
-
-A relative `--profile` joins onto the root through `profiles.resolvePath`,
-the same function that resolves every `Path=` value in `profiles.ini`. An
-absolute one comes back unchanged.
+`--profile <path>` names a profile directory and matches Firefox's own
+`-profile <path>`. `main` resolves the root inside the `--list-profiles`
+branch and inside the default-profile branch, so a run passing `--profile`
+walks nothing and opens the directory on a machine carrying no Firefox
+install.
 
 With no root found, `ffpw` prints every path it tried and exits 1.
 `--list-profiles` prints the resolved root to stderr and the profiles to

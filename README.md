@@ -60,9 +60,9 @@ Run `ffpw`. It finds the directory holding `profiles.ini` and opens the
 profile your Firefox uses. It prompts for a Primary Password when the
 profile has one.
 
-On macOS that directory is `~/Library/Application Support/Firefox`. On
-Linux `ffpw` tries three, in this order, and takes the first one holding a
-`profiles.ini`:
+macOS keeps that directory at `~/Library/Application Support/Firefox`. On
+Linux `ffpw` tries the paths below in order and reads the first one holding
+a `profiles.ini`:
 
 ```
 ~/.mozilla/firefox                                # distro package
@@ -70,8 +70,7 @@ Linux `ffpw` tries three, in this order, and takes the first one holding a
 ~/.var/app/org.mozilla.firefox/.mozilla/firefox   # Flatpak
 ```
 
-One run reads one of them. `ffpw --profiles-dir <dir>` names a directory
-and skips the search.
+One run reads one of them.
 
 | Key | Does |
 |---|---|
@@ -98,9 +97,8 @@ ffpw > /tmp/p              # the last y of the run lands in the file
 To open another profile:
 
 ```
-ffpw --list-profiles       # one profile per line, name then path
-ffpw --profile <path>      # open that directory
-ffpw --profiles-dir <dir>  # read profiles.ini from <dir>
+ffpw --list-profiles   # one profile per line, name then path
+ffpw --profile <path>  # open that directory
 ```
 
 `--list-profiles` prints the profiles to stdout and the directory it read

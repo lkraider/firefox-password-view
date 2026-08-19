@@ -601,6 +601,26 @@ fn listProfiles(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) !vo
     try writer.interface.flush();
 }
 
+/// The first root under $HOME holding a profiles.ini. Null means the reason
+/// is already on stderr and `main` returns 1.
+///
+/// Only the two branches that read profiles.ini call this. `--profile <path>`
+/// names a directory outright, so that run opens it on a machine carrying no
+/// Firefox install.
+fn resolveFirefoxDir(io: std.Io, gpa: std.mem.Allocator, home: ?[]const u8) !?[]u8 {
+    const dir = home orelse {
+        try write(io, .stderr(), "HOME is not set\n");
+        return null;
+    };
+    return profiles.resolveDir(io, gpa, dir) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        error.NoFirefoxDir => {
+            try reportNoFirefoxDir(io, gpa, dir);
+            return null;
+        },
+    };
+}
+
 fn reportNoFirefoxDir(io: std.Io, gpa: std.mem.Allocator, home: []const u8) !void {
     var buf: [1024]u8 = undefined;
     var writer = std.Io.File.stderr().writer(io, &buf);
@@ -610,7 +630,6 @@ fn reportNoFirefoxDir(io: std.Io, gpa: std.mem.Allocator, home: []const u8) !voi
         defer gpa.free(dir);
         try writer.interface.print("  {s}\n", .{dir});
     }
-    try writer.interface.writeAll("pass --profiles-dir <dir> to name a root\n");
     try writer.interface.flush();
 }
 
@@ -640,7 +659,7 @@ pub fn main(init: std.process.Init) !u8 {
     defer gpa.free(argv);
     const options = cli.parse(argv) catch |err| {
         const message = switch (err) {
-            error.MissingValue => "ffpw: --profile and --profiles-dir each need a path\n",
+            error.MissingValue => "ffpw: --profile needs a path\n",
             error.UnknownFlag => "ffpw: unrecognized argument, see ffpw --help\n",
         };
         try write(io, .stderr(), message);
@@ -651,34 +670,23 @@ pub fn main(init: std.process.Init) !u8 {
         return 0;
     }
 
-    const firefox_dir = if (options.profiles_dir) |dir|
-        try gpa.dupe(u8, dir)
-    else root: {
-        const home = init.environ_map.get("HOME") orelse {
-            try write(io, .stderr(), "HOME is not set\n");
-            return 1;
-        };
-        break :root profiles.resolveDir(io, gpa, home) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            error.NoFirefoxDir => {
-                try reportNoFirefoxDir(io, gpa, home);
-                return 1;
-            },
-        };
-    };
-    defer gpa.free(firefox_dir);
+    const home = init.environ_map.get("HOME");
 
     if (options.list_profiles) {
+        const firefox_dir = try resolveFirefoxDir(io, gpa, home) orelse return 1;
+        defer gpa.free(firefox_dir);
         try listProfiles(io, gpa, firefox_dir);
         return 0;
     }
 
-    // A relative --profile joins onto the root the same way a `Path=` value
-    // does. One `free` covers either branch.
+    // Duped so one `free` covers both this and resolveDefault's allocation.
     const profile = if (options.profile_path) |path|
-        try profiles.resolvePath(gpa, firefox_dir, path)
-    else
-        try resolveDefaultProfile(io, gpa, firefox_dir);
+        try gpa.dupe(u8, path)
+    else default: {
+        const firefox_dir = try resolveFirefoxDir(io, gpa, home) orelse return 1;
+        defer gpa.free(firefox_dir);
+        break :default try resolveDefaultProfile(io, gpa, firefox_dir);
+    };
     defer gpa.free(profile);
 
     const helpers: []const []const []const u8 = if (builtin.os.tag == .macos)

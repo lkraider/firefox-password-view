@@ -74,7 +74,7 @@ pub fn main(init: std.process.Init) !u8 {
     const argv = try collectArgs(gpa, init.minimal.args);
     defer freeArgs(gpa, argv);
     const options = cli.parse(argv) catch {
-        reportFatal("Usage: FirefoxPasswordView.exe [--profiles-dir <dir>] [--profile <path>]");
+        reportFatal("Usage: FirefoxPasswordView.exe [--profile <path>]");
         return 2;
     };
 
@@ -90,25 +90,13 @@ pub fn main(init: std.process.Init) !u8 {
     defer app.model.deinit();
     defer app.text.deinit();
 
-    const firefox_dir: ?[]u8 = if (options.profiles_dir) |dir|
-        try gpa.dupe(u8, dir)
-    else if (init.environ_map.get("APPDATA")) |appdata|
-        try std.fs.path.join(gpa, &.{ appdata, "Mozilla", "Firefox" })
-    else
-        null;
-    defer if (firefox_dir) |dir| gpa.free(dir);
-
     if (options.profile_path) |path| {
-        const resolved = if (firefox_dir) |dir|
-            try core.profiles.resolvePath(gpa, dir, path)
-        else
-            try gpa.dupe(u8, path);
         app.profiles = try gpa.dupe(core.profiles.Profile, &.{.{
-            .name = try gpa.dupe(u8, resolved),
-            .path = resolved,
+            .name = try gpa.dupe(u8, path),
+            .path = try gpa.dupe(u8, path),
         }});
-    } else if (firefox_dir) |dir| {
-        app.profiles = readProfiles(gpa, io, dir) catch &.{};
+    } else if (init.environ_map.get("APPDATA")) |appdata| {
+        app.profiles = readProfiles(gpa, io, appdata) catch &.{};
     }
     defer freeProfiles(gpa, app.profiles);
 
@@ -205,7 +193,10 @@ fn freeArgs(gpa: std.mem.Allocator, argv: []const []const u8) void {
 }
 
 /// Firefox keeps profiles.ini under %APPDATA%\Mozilla\Firefox on Windows.
-fn readProfiles(gpa: std.mem.Allocator, io: std.Io, firefox_dir: []const u8) ![]core.profiles.Profile {
+fn readProfiles(gpa: std.mem.Allocator, io: std.Io, appdata: []const u8) ![]core.profiles.Profile {
+    const firefox_dir = try std.fs.path.join(gpa, &.{ appdata, "Mozilla", "Firefox" });
+    defer gpa.free(firefox_dir);
+
     const ini_path = try std.fs.path.join(gpa, &.{ firefox_dir, "profiles.ini" });
     defer gpa.free(ini_path);
 

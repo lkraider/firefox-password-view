@@ -15,10 +15,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   then the Ubuntu snap root, then the Flatpak root, and reads the first one
   holding a `profiles.ini`. One run reads one root, because each Firefox
   install reads the one root its packaging fixes.
-- `--profiles-dir <dir>` names the directory holding `profiles.ini` and
-  skips that search. It parses on every platform, and the Windows app takes
-  it as an override for `%APPDATA%\Mozilla\Firefox`. A relative `--profile`
-  now joins onto the resolved directory.
 - A copy on Linux runs `wl-copy`, `xclip` or `xsel`, picked from
   `$WAYLAND_DISPLAY` and `$DISPLAY`. The status line reads `copied` on every
   press, so a host with none of those installed and a terminal that drops
