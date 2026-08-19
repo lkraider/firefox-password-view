@@ -1,6 +1,7 @@
 //! Resolves which profile Firefox opens.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub const Error = error{NoProfileFound} || std.mem.Allocator.Error;
 
@@ -48,8 +49,11 @@ fn freeSections(gpa: std.mem.Allocator, sections: []const Section) void {
     gpa.free(sections);
 }
 
-fn resolvePath(gpa: std.mem.Allocator, firefox_dir: []const u8, rel: []const u8) std.mem.Allocator.Error![]u8 {
-    if (rel.len > 0 and rel[0] == '/') return gpa.dupe(u8, rel);
+/// std.fs.path.isAbsolute reads a drive letter on Windows. Testing `rel[0]`
+/// against '/' sent `Path=C:\Users\x\profile` down the join branch and
+/// produced `%APPDATA%\Mozilla\Firefox\C:\Users\x\profile`.
+pub fn resolvePath(gpa: std.mem.Allocator, firefox_dir: []const u8, rel: []const u8) std.mem.Allocator.Error![]u8 {
+    if (std.fs.path.isAbsolute(rel)) return gpa.dupe(u8, rel);
     return std.fs.path.join(gpa, &.{ firefox_dir, rel });
 }
 
@@ -206,3 +210,17 @@ test "enumerate returns an empty slice for an ini with no Profile sections" {
     defer std.testing.allocator.free(got);
     try std.testing.expectEqual(@as(usize, 0), got.len);
 }
+
+test "resolvePath leaves an absolute path alone and joins a relative one" {
+    const gpa = std.testing.allocator;
+
+    const absolute = if (builtin.os.tag == .windows) "C:\\Users\\x\\profile" else "/home/x/profile";
+    const kept = try resolvePath(gpa, "/ff", absolute);
+    defer gpa.free(kept);
+    try std.testing.expectEqualStrings(absolute, kept);
+
+    const joined = try resolvePath(gpa, "/ff", "Profiles/p");
+    defer gpa.free(joined);
+    try std.testing.expectEqualStrings("/ff" ++ sep ++ "Profiles/p", joined);
+}
+
