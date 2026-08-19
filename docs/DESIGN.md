@@ -274,11 +274,95 @@ A `Store.open` that lands while Firefox writes `key4.db` returns
 Reaching that state needs a write to a live profile, and the known
 limitations list records it as untested.
 
-The decryption modules call no OS-specific API. The macOS assumptions live
-in the front ends. `core.zig` and `tui/src/main.zig` build the profile
-directory as `$HOME/Library/Application Support/Firefox`, and
-`tui/src/main.zig` copies by running `pbcopy`. `win/src/main.zig` builds
-`%APPDATA%\Mozilla\Firefox` and copies through `SetClipboardData`.
+The decryption modules call no OS-specific API. The platform assumptions
+live in the front ends. `core.zig` and `tui/src/main.zig` find the root
+through `profiles.resolveDir`, and `win/src/main.zig` builds
+`%APPDATA%\Mozilla\Firefox`. `tui/src/main.zig` copies by running a helper
+program and `win/src/main.zig` copies through `SetClipboardData`.
+
+### The profile root
+
+A root is the directory holding `profiles.ini` and the profile folders it
+names. `profiles.home_relative_dirs` lists the roots for the host it
+compiles for, each relative to `$HOME`. macOS has one,
+`Library/Application Support/Firefox`. Linux has three:
+
+    .mozilla/firefox
+    snap/firefox/common/.mozilla/firefox
+    .var/app/org.mozilla.firefox/.mozilla/firefox
+
+`resolveDir` walks that list in order and returns the first root holding a
+`profiles.ini`. One run reads one root. A distro package, the Ubuntu snap
+and the Flatpak each keep their own, and one machine can carry all of them
+populated. Each Firefox install reads the one root its packaging fixes, and
+the snap Firefox cannot see `~/.mozilla/firefox`. Reading every root and
+merging the lists would print one list mixing two installs, and `--profile`
+could then name a profile the running Firefox cannot open.
+
+`--profiles-dir <dir>` names a root and skips the walk. Firefox's own
+`-profile <path>` names a profile directory, and this project's `--profile`
+matches it. Firefox has no flag for the container. In `about:profiles` the
+label "Root Directory" names the profile folder, so `--profile-root` would
+carry Firefox's meaning for a different thing.
+
+A relative `--profile` joins onto the root through `profiles.resolvePath`,
+the same function that resolves every `Path=` value in `profiles.ini`. An
+absolute one comes back unchanged.
+
+With no root found, `ffpw` prints every path it tried and exits 1.
+`--list-profiles` prints the resolved root to stderr and the profiles to
+stdout, so `cut -f1` over stdout keeps working.
+
+### Copying on Linux
+
+`tui/src/main.zig` picks a helper chain from the environment and stops at
+the first helper that spawns and exits 0:
+
+- `$WAYLAND_DISPLAY` set: `wl-copy`, then `xclip -selection clipboard`, then
+  `xsel --clipboard --input`.
+- `$DISPLAY` set alone: `xclip`, then `xsel`.
+- With no display variable set: the chain is empty.
+
+`wl-copy` connects to a Wayland compositor and fails on an X11 session.
+`xclip` and `xsel` need `$DISPLAY`, and they reach a Wayland clipboard
+through XWayland. Over SSH with no X11 forwarding, every helper fails to
+connect, and libvaxis's OSC 52 write reaches the local terminal's
+clipboard.
+`wl-copy --paste-once` serves one paste request and then drops the
+clipboard, so a paste into an XWayland window returns nothing.
+
+The status line reads `copied` on every press. A Linux host with no helper
+installed, on a terminal that drops OSC 52, reports `copied` and leaves the
+clipboard empty. `README.md` and `ffpw --help` name `wl-clipboard` and
+`xclip` as the packages a copy needs.
+
+Linux gets no conceal marker. macOS writes
+`org.nspasteboard.ConcealedType` and Windows registers four formats.
+
+### The stdout path
+
+`y` copies the password into a buffer on `Model` when
+`std.Io.File.stdout().isTty` returns false. `main` writes that buffer once,
+after `app.run` returns, with no trailing newline. The last `y` of the run
+is what a reader receives.
+
+    ffpw                    # stdout is the terminal, so nothing is written
+    ffpw | wl-copy          # stdout is a pipe, so the password goes down it
+    ffpw > /tmp/p           # stdout is a file, so the password lands there
+
+libvaxis opens `/dev/tty` directly, so the UI survives a pipe. An
+interactive `ffpw` writes into terminal scrollback, into a tmux buffer and
+into `script` output, and the tty check keeps the password out of all
+three. The helper chain runs independently of this, so `ffpw > /tmp/p`
+behaves the same on a host with `xclip` and on one without it. A `y` press
+is what puts bytes anywhere, so a redirect alone writes nothing.
+
+`wl-copy` and `xclip` copy the bytes they receive, and a newline inside a
+password field breaks a login form, so the write ends without one. Bytes
+already in a pipe cannot be retracted, so buffering lets the last `y`
+replace the one before it. The write ends with `catch {}`: a reader that
+exits first gives `error.BrokenPipe`, and a `try` would make
+`ffpw | head -c 5` exit non-zero with a trace.
 
 Each platform marks a copied password so a clipboard manager skips it.
 macOS writes the `org.nspasteboard.ConcealedType` pasteboard type.
@@ -300,7 +384,7 @@ number right after its own write and compares before it clears, so a copy
 another program made in between stays. The call is
 `GetClipboardSequenceNumber` on Windows and `NSPasteboard.changeCount` on
 macOS. The TUI writes through
-OSC 52 and `pbcopy` and arms no timer.
+OSC 52 and a helper program, and arms no timer on any platform.
 
 ## Build and platform notes
 
@@ -312,23 +396,36 @@ a host without the Command Line Tools. The C ABI library still links libc,
 and that link needs the same SDK, so cross-compiling `libffpw.a` to macOS
 from another host stays out of reach.
 
-Three build hosts produce the same Windows exe, and `ci.yml` asserts it. Each
-build job writes its exe's SHA-256 to the run summary and publishes it as a job
-output. `reproducible-build` records both targets on `macos-15`, from the exes
-`scripts/package-release.sh` put in the zips. `windows-test` builds `x86_64`
-twice in parallel on `windows-latest`. `windows-arm-test` cross-compiles
-`arm64` on `windows-11-arm` through the emulated x86_64 toolchain. The
-`compare-sums` job waits for all three and runs `scripts/compare-sums.sh` once
-per target. An empty sum fails that job, since two missing values compare
-equal.
+Two build hosts produce the same bytes for each cross-compiled target, and
+`ci.yml` asserts it. Each build job writes its binary's SHA-256 to the run
+summary and publishes it as a job output. `reproducible-build` records every
+cross target on `macos-15`, from the binaries `scripts/package-release.sh`
+put in the archives. `windows-test` builds `x86_64` twice in parallel on
+`windows-latest`. `windows-arm-test` cross-compiles `arm64` on
+`windows-11-arm` through the emulated x86_64 toolchain. `linux-test` builds
+`x86_64-linux-musl` on `ubuntu-latest` and `linux-arm-test` builds
+`aarch64-linux-musl` on `ubuntu-24.04-arm`. The `compare-sums` job waits for
+all of them and runs `scripts/compare-sums.sh` once per target. An empty sum
+fails that job, since two missing values compare equal.
 
-`windows-test` also fails when its own two builds disagree. `build.zig` pins
-the cpu to a baseline, so the target string decides the code generation on
-every host.
+`windows-test` also fails when its own two builds disagree. A query carrying
+a triple serializes `-mcpu baseline`, so the target string decides the code
+generation on every host.
+
+`linux-test` and `linux-arm-test` run `zig build test` natively. No other
+job runs the suite on Linux. `build.zig` reads `host_has_sqlite` from
+`builtin.os.tag == .macos`, so the oracle skips itself and those runners
+install no libsqlite3 headers. Each job then asserts the ReleaseSafe `ffpw`
+carries no `PT_INTERP` segment. `file` calls a static PIE "static-pie
+linked", so a grep for "statically linked" fails on a correct binary.
+`zig build-exe --help` reports `--build-id ... none (default)`, so no build
+ID enters the ELF and the two hosts agree on the bytes.
 
 Nothing else links a C library. `zig build -Dtarget=x86_64-windows-gnu`,
-`-Dtarget=aarch64-windows-gnu` and `-Dtarget=x86_64-linux-musl` all run on a
-macOS host. `build.zig` names `user32`, `comctl32`, `gdi32`, `dwmapi`,
+`-Dtarget=aarch64-windows-gnu`, `-Dtarget=x86_64-linux-musl` and
+`-Dtarget=aarch64-linux-musl` all run on a macOS host. `tui_mod` sets no
+`link_libc`, so the two musl targets write static binaries that run on any
+distro. `build.zig` names `user32`, `comctl32`, `gdi32`, `dwmapi`,
 `uxtheme` and `advapi32`, and Zig links `kernel32` for every Windows
 target. Zig bundles a `.def` file for each one under
 `lib/libc/mingw/lib-common/` and generates the import library from it, so
@@ -419,9 +516,12 @@ no permission prompt.
   `-Dtarget=aarch64-windows-gnu`. `zig build test` runs on `windows-latest`
   and on `macos-15`. No machine runs the core tests compiled for arm64
   Windows.
-- Linux is deferred. The core builds for `x86_64-linux-musl` today. A
-  Linux TUI needs the profile directory (`~/.mozilla/firefox`) and a
-  clipboard call to replace `pbcopy`.
+- The Linux TUI arms no clipboard timer and writes no conceal marker. A
+  password it copies stays on the clipboard until something else replaces
+  it.
+- A Linux host with no clipboard helper installed, on a terminal that drops
+  OSC 52, reports `copied` and leaves the clipboard empty. The status line
+  carries one string.
 - The Windows TUI is out of scope. `tui/src/main.zig` calls
   `std.process.Args.Iterator.init`, and that function is a compile error on
   Windows. `build.zig` installs `ffpw` only for a non-Windows target.
@@ -432,7 +532,10 @@ no permission prompt.
   against `-j4`, and ad-hoc codesigning. Two machines with different
   macOS SDKs installed produce different bytes from the same source.
   Zig's macOS linker hashes SDK-derived bytes into the binary's
-  `LC_UUID`. `vtool(1)` rewrites `LC_BUILD_VERSION`. It has no option for
+  `LC_UUID`. The host's macOS version stays out of the binary:
+  `build.zig` writes `os_version_min` into `target.query`, so
+  `LC_BUILD_VERSION` reports `minos 14.0` on every runner image. An empty
+  query lets the compiler read that field from the build host. `vtool(1)` rewrites `LC_BUILD_VERSION`. It has no option for
   `LC_UUID`. Closing this needs the macOS SDK vendored into every build
   environment, as `zig-build-macos-sdk` does for Ghostty. Until then
   `Formula/ffpw.rb` and `Casks/firefox-password-view.rb` carry CI's hash,

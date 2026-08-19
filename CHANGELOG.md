@@ -2,6 +2,55 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Linux binaries. Releases ship `ffpw-x86_64-linux.tar.gz` and
+  `ffpw-aarch64-linux.tar.gz`, both cross-compiled from macOS against musl
+  at `ReleaseSafe`. `tui_mod` links no C library, so each one is static and
+  runs on any distro. `ci.yml` builds both natively too and
+  `scripts/compare-sums.sh` compares the two hosts.
+- `ffpw` finds the Linux profile directory. It tries `~/.mozilla/firefox`,
+  then the Ubuntu snap root, then the Flatpak root, and reads the first one
+  holding a `profiles.ini`. One run reads one root, because each Firefox
+  install reads the one root its packaging fixes.
+- `--profiles-dir <dir>` names the directory holding `profiles.ini` and
+  skips that search. It parses on every platform, and the Windows app takes
+  it as an override for `%APPDATA%\Mozilla\Firefox`. A relative `--profile`
+  now joins onto the resolved directory.
+- A copy on Linux runs `wl-copy`, `xclip` or `xsel`, picked from
+  `$WAYLAND_DISPLAY` and `$DISPLAY`. The status line reads `copied` on every
+  press, so a host with none of those installed and a terminal that drops
+  OSC 52 reports a copy and leaves the clipboard empty. `README.md` and
+  `ffpw --help` name the packages.
+- `y` writes the password to stdout on any run where stdout is a pipe or a
+  file, so `ffpw | wl-copy` and `ffpw > /tmp/p` work. The write happens once,
+  after the UI exits, with no trailing newline, and the last `y` of the run
+  is what a reader receives. On a terminal it writes nothing.
+- `scripts/linux-launch-check.sh` drives the paths that run without a
+  terminal and exits non-zero on a failure. `ci.yml` runs it on
+  `ubuntu-latest` and `ubuntu-24.04-arm`. Those two jobs are also the first
+  to run `zig build test` on Linux.
+
+### Changed
+
+- The macOS build pins `LC_BUILD_VERSION`'s `minos` to 14.0, the floor
+  `Package.swift` and `Formula/ffpw.rb` already declare. `build.zig` writes
+  `os_version_min` into `target.query`, since `std.Build` sends the compiler
+  the query and never the resolved result. An empty query let the compiler
+  read `minos` from the build host, so a runner image bump moved the
+  published tarball's hash.
+- `--list-profiles` prints the directory it read to stderr. Its stdout stays
+  at name, tab, path.
+
+### Fixed
+
+- `profiles.resolvePath` tested `rel[0]` against `'/'`, so a Windows
+  `profiles.ini` carrying `IsRelative=0` and `Path=C:\Users\x\profile`
+  produced `%APPDATA%\Mozilla\Firefox\C:\Users\x\profile`. It calls
+  `std.fs.path.isAbsolute`. That function reads a drive letter.
+
 ## [1.2.0] - 2026-08-18
 
 ### Added

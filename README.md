@@ -4,8 +4,8 @@
 
 A terminal UI, a macOS app and a Windows app show the saved logins in a
 local Firefox profile. All three read them through one Zig core. The
-released binaries are Apple Silicon macOS, Windows x86_64 and Windows
-ARM64.
+released binaries are Apple Silicon macOS, Linux x86_64, Linux ARM64,
+Windows x86_64 and Windows ARM64.
 
 ### TUI
 
@@ -33,6 +33,22 @@ not notarized. On first launch, right-click the app in Finder and choose
 Open. Gatekeeper otherwise blocks it as coming from an unidentified
 developer.
 
+On Linux, download `ffpw-x86_64-linux.tar.gz` or
+`ffpw-aarch64-linux.tar.gz` from the releases page:
+
+```
+tar -xzf ffpw-x86_64-linux.tar.gz
+install -m 755 ffpw ~/.local/bin/ffpw
+```
+
+The binary is static, so it runs on any distro. A copy needs `wl-clipboard`
+on Wayland or `xclip` on X11. Install one:
+
+```
+sudo apt install wl-clipboard     # or: xclip
+sudo dnf install wl-clipboard
+```
+
 On Windows, download `FirefoxPasswordView-<version>-windows-arm64.zip` or
 `-windows-x86_64.zip` from the releases page and unzip it. The exe is a
 single file and needs no install. It is unsigned, so SmartScreen shows a
@@ -40,9 +56,22 @@ warning on first launch. Choose More info, then Run anyway.
 
 ## Using it
 
-Run `ffpw`. It reads `profiles.ini` under `~/Library/Application
-Support/Firefox` and opens the profile your Firefox uses. It prompts for a
-Primary Password when the profile has one.
+Run `ffpw`. It finds the directory holding `profiles.ini` and opens the
+profile your Firefox uses. It prompts for a Primary Password when the
+profile has one.
+
+On macOS that directory is `~/Library/Application Support/Firefox`. On
+Linux `ffpw` tries three, in this order, and takes the first one holding a
+`profiles.ini`:
+
+```
+~/.mozilla/firefox                                # distro package
+~/snap/firefox/common/.mozilla/firefox            # Ubuntu snap
+~/.var/app/org.mozilla.firefox/.mozilla/firefox   # Flatpak
+```
+
+One run reads one of them. `ffpw --profiles-dir <dir>` names a directory
+and skips the search.
 
 | Key | Does |
 |---|---|
@@ -52,12 +81,30 @@ Primary Password when the profile has one.
 | `y` | Copy the selected password. The row stays masked. |
 | `q`, `ctrl-c` | Quit. |
 
+On Linux, `y` runs `wl-copy`, `xclip` or `xsel`. It reports `copied` on
+every press, including a press on a host with none of them installed, so
+install `wl-clipboard` or `xclip` before you rely on it. Over SSH the copy
+goes through OSC 52. It reaches the clipboard of the terminal you are
+sitting at.
+
+`y` also writes the password to stdout on any run where stdout is a pipe or
+a file. On a terminal it writes nothing.
+
+```
+ffpw | wl-copy             # press y, then q
+ffpw > /tmp/p              # the last y of the run lands in the file
+```
+
 To open another profile:
 
 ```
 ffpw --list-profiles       # one profile per line, name then path
 ffpw --profile <path>      # open that directory
+ffpw --profiles-dir <dir>  # read profiles.ini from <dir>
 ```
+
+`--list-profiles` prints the profiles to stdout and the directory it read
+to stderr.
 
 On Windows, run `FirefoxPasswordView.exe`. It reads `profiles.ini` under
 `%APPDATA%\Mozilla\Firefox`. The `Profile` menu lists every profile it
@@ -107,7 +154,8 @@ something else in the meantime and that copy stays.
 
 The TUI runs no timer. A password it copies stays on the clipboard until
 something else replaces it, and a revealed row stays open until you press
-`enter` again.
+`enter` again. On Linux it writes no marker, so a clipboard manager there
+keeps the copy.
 
 Anyone who can read your files or your memory already has this data.
 `key4.db` is readable by your own user, and Firefox exposes the same
@@ -143,6 +191,17 @@ The Windows app cross-compiles from macOS or Linux with no Windows SDK:
 zig build win -Dtarget=aarch64-windows-gnu -Doptimize=ReleaseSafe
 zig build win -Dtarget=x86_64-windows-gnu  -Doptimize=ReleaseSafe
 ```
+
+The Linux binaries cross-compile the same way. musl links statically, so one
+binary per architecture runs on any distro:
+
+```
+zig build -Dtarget=x86_64-linux-musl  -Doptimize=ReleaseSafe
+zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseSafe
+```
+
+`scripts/linux-launch-check.sh zig-out/bin/ffpw` drives the paths that run
+without a terminal.
 
 The released zips are built at `ReleaseSafe`. That mode keeps the bounds and
 alignment checks over the hand-written `key4.db` reader.
