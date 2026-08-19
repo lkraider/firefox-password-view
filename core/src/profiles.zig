@@ -5,6 +5,50 @@ const builtin = @import("builtin");
 
 pub const Error = error{NoProfileFound} || std.mem.Allocator.Error;
 
+/// Firefox writes profiles.ini under one of these, relative to $HOME. A
+/// distro package, the Ubuntu snap and the Flatpak each keep their own root,
+/// and one machine can carry all of them. Each install reads the one root its
+/// packaging fixes. A merged list would name profiles the running Firefox
+/// cannot open.
+///
+/// Windows keeps its root under %APPDATA%. `win/src/main.zig` joins it.
+pub const home_relative_dirs: []const []const u8 = switch (builtin.os.tag) {
+    .macos => &.{"Library/Application Support/Firefox"},
+    .windows => &.{},
+    else => &.{
+        ".mozilla/firefox",
+        "snap/firefox/common/.mozilla/firefox",
+        ".var/app/org.mozilla.firefox/.mozilla/firefox",
+    },
+};
+
+pub const DirError = error{NoFirefoxDir} || std.mem.Allocator.Error;
+
+/// The first root under `home` that holds a profiles.ini. Caller owns the
+/// memory.
+pub fn resolveDir(io: std.Io, gpa: std.mem.Allocator, home: []const u8) DirError![]u8 {
+    return resolveDirIn(io, gpa, home, home_relative_dirs);
+}
+
+fn resolveDirIn(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    home: []const u8,
+    dirs: []const []const u8,
+) DirError![]u8 {
+    const cwd = std.Io.Dir.cwd();
+    for (dirs) |rel| {
+        const dir = try std.fs.path.join(gpa, &.{ home, rel });
+        errdefer gpa.free(dir);
+
+        const ini = try std.fs.path.join(gpa, &.{ dir, "profiles.ini" });
+        defer gpa.free(ini);
+
+        if (cwd.access(io, ini, .{})) return dir else |_| gpa.free(dir);
+    }
+    return error.NoFirefoxDir;
+}
+
 const KeyValue = struct { key: []const u8, value: []const u8 };
 const Section = struct { name: []const u8, fields: []const KeyValue };
 
@@ -224,3 +268,19 @@ test "resolvePath leaves an absolute path alone and joins a relative one" {
     try std.testing.expectEqualStrings("/ff" ++ sep ++ "Profiles/p", joined);
 }
 
+// home_relative_dirs holds one entry on macOS, so this passes its own list.
+test "resolveDir skips a root with no profiles.ini and reports the paths it tried" {
+    const gpa = std.testing.allocator;
+    var threaded: std.Io.Threaded = .init(gpa, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const found = try resolveDirIn(io, gpa, "core/testdata", &.{ "fresh", "two-profiles" });
+    defer gpa.free(found);
+    try std.testing.expectEqualStrings("core/testdata" ++ sep ++ "two-profiles", found);
+
+    try std.testing.expectError(
+        error.NoFirefoxDir,
+        resolveDirIn(io, gpa, "core/testdata", &.{"fresh"}),
+    );
+}
