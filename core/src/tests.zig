@@ -179,9 +179,9 @@ test "pbes2 rejects a scheme it does not implement" {
 }
 
 // The installed Firefox writes these fixtures over Marionette, so they
-// carry the format Firefox produces. See scripts/test-mkfixtures.py. A profile
-// from this machine dropped into core/testdata fails these tests, since
-// the documented passwords do not unlock it.
+// carry the format Firefox produces. See scripts/test-mkfixtures.py. Your own
+// Firefox profile dropped into core/testdata fails these tests, since the
+// documented passwords do not unlock it.
 
 fn readFixtureLogins(gpa: std.mem.Allocator, path: []const u8) ![]u8 {
     var threaded: std.Io.Threaded = .init(gpa, .{});
@@ -237,8 +237,8 @@ test "two-profiles resolves to the profile the install section names" {
 
     const profile = try profiles.resolveDefault(testing.allocator, firefox_dir, ini);
     defer testing.allocator.free(profile);
-    // profiles.resolveDefault joins through std.fs.path.join, which writes the
-    // host's separator.
+    // profiles.resolveDefault joins through std.fs.path.join. That function
+    // writes the host's separator.
     try testing.expectEqualStrings(
         firefox_dir ++ std.fs.path.sep_str ++ "Profiles/real.default-release",
         profile,
@@ -363,19 +363,18 @@ test "Store.search matches case-insensitively over hostname and username" {
 
     var out: [8]usize = undefined;
 
-    // Every entry in `fresh` carries "example" somewhere in its hostname.
+    // Every hostname in `fresh` is lowercase and carries "example".
     const example_count = s.search("EXAMPLE", &out);
     try testing.expectEqual(@as(usize, 3), example_count);
 
-    // An empty query matches every entry.
     const empty_count = s.search("", &out);
     try testing.expectEqual(s.entries.len, empty_count);
 
-    // A query that matches nothing.
     const none_count = s.search("no-such-substring-anywhere", &out);
     try testing.expectEqual(@as(usize, 0), none_count);
 
-    // A query narrow enough to match exactly one entry, by username.
+    // fixture-user-2 appears in no hostname, so this reaches the username
+    // field.
     const one_count = s.search("fixture-user-2", &out);
     try testing.expectEqual(@as(usize, 1), one_count);
     try testing.expectEqualStrings("https://sub.example.org", s.entries[out[0]].hostname);

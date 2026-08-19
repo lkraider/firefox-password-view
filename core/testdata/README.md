@@ -98,6 +98,6 @@ python3 scripts/test-mkfixtures.py reserved
 ```
 
 `core/src/tests.zig` asserts each fixture's password-check decrypts under its
-documented password. A profile from this machine dropped in here fails that
+documented password. Your own Firefox profile dropped in here fails that
 assertion, since the documented password does not unlock it. The failure
-stops that profile's credentials from reaching a test run.
+stops your credentials from reaching a test run.

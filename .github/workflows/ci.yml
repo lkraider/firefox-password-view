@@ -82,10 +82,10 @@ jobs:
           Remove-Item zig.zip
 
       # Three zig processes at once: two builds of the exe and the test suite.
-      # Measured on a development Mac: 19 seconds of wall clock for 76 of cpu.
       #
-      # The tests run at ReleaseSafe, which scripts/release-package.sh builds
-      # with. Measured on Zig 0.16.0: ReleaseSafe fills undefined memory with
+      # The tests run at ReleaseSafe. scripts/release-package.sh builds the
+      # released exe with that mode. Measured on Zig 0.16.0: it fills
+      # undefined memory with
       # 0xAA, as Debug does, and keeps the bounds, overflow and alignment
       # checks. It also runs the optimizer, so this step tests the code
       # generation of a released exe. build-and-test runs the suite in Debug.
@@ -102,9 +102,8 @@ jobs:
         run: .\scripts\win-launch-check.ps1
 
   windows-arm-test:
-    # Runs the arm64 exe the release ships. windows-latest above is x86_64, and
-    # the wine rig on a development Mac is x86_64 under Rosetta 2, so neither
-    # can load an ARM64 PE.
+    # Runs the arm64 exe the release ships. No x86_64 host can load an ARM64
+    # PE, and windows-latest above is x86_64.
     #
     # This job drives the x86_64 toolchain under Windows-on-ARM emulation and
     # cross-compiles, the way scripts/release-package.sh cross-compiles from

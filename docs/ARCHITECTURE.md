@@ -125,9 +125,9 @@ buffer.
 windows, so a panic inside `windowProc` re-enters `windowProc`. A `reporting`
 flag turns a second panic into `exit(3)` with no message.
 
-`ci.yml`'s two Windows jobs run `scripts/win-launch-check.ps1`, which asserts
-the exe is still alive 5 seconds after launch. That assertion fails on a panic
-during startup.
+`ci.yml`'s two Windows jobs run `scripts/win-launch-check.ps1`. That script
+asserts the exe is still alive 5 seconds after launch, so a panic during
+startup fails the job.
 
 ## Linking the core from another front end
 
