@@ -1,7 +1,7 @@
 # Reproducible builds
 
-Two packagings of one commit write the same bytes, except for the macOS app
-zip. Every setting recorded here exists to keep that true.
+Two packagings of one commit write the same bytes. The macOS app zip is the
+exception. Every setting recorded here exists to keep the rest true.
 
     Measured against
     Zig 0.16.0 · macOS 15.6, and the macos-15 runner at 15.7.7
@@ -31,7 +31,7 @@ ID enters an ELF.
 
 ## The archives
 
-Three settings in `release-package.sh` keep the archive bytes independent of
+These settings in `release-package.sh` keep the archive bytes independent of
 which Mac runs it.
 
 `tar --format ustar`. bsdtar defaults to "pax restricted". That format adds a
@@ -66,9 +66,8 @@ from `ci.yml`'s `reproducible-build` job. `release.yml` packages on a second
 runner and compares both hashes with the assets it built. A mismatch exits
 before the upload.
 
-This is the only artifact with that limit. Every other one reproduces across
-Macs, measured on 15.6 against the runner's 15.7.7 and across three runs from
-clean at -03, +09 and +12:45.
+Every other artifact reproduces across Macs, measured on 15.6 against the
+runner's 15.7.7 and across three runs from clean at -03, +09 and +12:45.
 
 ## What CI asserts
 

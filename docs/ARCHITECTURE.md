@@ -26,7 +26,7 @@ so the row that recorded the original choice stays readable.
 | Windows optimize mode | `ReleaseSafe` for both released zips | `ReleaseSmall` saves 81 KB in the zip and drops the bounds, alignment and overflow checks. `sqlitedb.zig` takes every offset it follows from the file it reads |
 | Zig | Pin 0.16.0 | Tracking master breaks on each stdlib redesign |
 | Reveal | Masked by default, reveal one entry, copy to clipboard | Printing every password fills terminal scrollback |
-| Architecture | Ship one `aarch64-macos` slice, plus `x86_64-windows` and `aarch64-windows` | A macOS universal binary adds a lipo step and a second build for an architecture no release targets |
+| Target architectures | Ship one `aarch64-macos` slice, plus `x86_64-windows` and `aarch64-windows` | A macOS universal binary adds a lipo step and a second build for an architecture no release targets |
 | Fixtures | Written by an installed Firefox over Marionette, committed under `core/testdata/` | A generator built from this project's own reading of the format would only show the reader agrees with itself |
 | Archive determinism | `--format ustar`, an absolute `touch -d` instant, `TZ=UTC` on `zip` and `ditto` | `SOURCE_DATE_EPOCH` with `--mtime` and `--clamp-mtime`, the reproducible-builds.org recipe. bsdtar 3.5.3 accepts neither flag |
 

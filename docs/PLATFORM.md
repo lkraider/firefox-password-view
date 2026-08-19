@@ -35,16 +35,15 @@ Nothing else links a C library. `zig build -Dtarget=x86_64-windows-gnu`,
 `-Dtarget=aarch64-windows-gnu`, `-Dtarget=x86_64-linux-musl` and
 `-Dtarget=aarch64-linux-musl` all run on a macOS host. `tui_mod` sets no
 `link_libc`, so the two musl targets write static binaries that run on any
-distro. `linux-test` and `linux-arm-test` put that claim under test: they
-assert the ReleaseSafe `ffpw` carries no `PT_INTERP` segment. `file` calls a
-static PIE "static-pie linked", so a grep for "statically linked" fails on a
-correct binary.
+distro. `linux-test` and `linux-arm-test` assert the ReleaseSafe `ffpw`
+carries no `PT_INTERP` segment. A dynamically linked binary names its loader
+there. `file` calls a static PIE "static-pie linked", so a grep for
+"statically linked" fails on a correct binary.
 
-`build.zig` names `user32`, `comctl32`, `gdi32`, `dwmapi`,
-`uxtheme` and `advapi32`, and Zig links `kernel32` for every Windows
-target. Zig bundles a `.def` file for each one under
-`lib/libc/mingw/lib-common/` and generates the import library from it, so
-the Win32 link needs no Windows SDK.
+`build.zig` names `user32`, `comctl32`, `gdi32`, `dwmapi`, `uxtheme` and
+`advapi32`, and Zig links `kernel32` for every Windows target. Zig bundles a
+`.def` file for each one under `lib/libc/mingw/lib-common/` and generates the
+import library from it, so the Win32 link needs no Windows SDK.
 
 ## Windows
 
