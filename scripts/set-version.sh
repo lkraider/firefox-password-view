@@ -32,7 +32,13 @@ fi
 
 cd "$(cd "$(dirname "$0")/.." && pwd)"
 
-read_plist() { /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" macos/Info.plist; }
+# PlistBuddy rewrites the whole file: it converts the 4-space indent to tabs
+# and sorts the keys. That turned a two-line bump into a 36-line diff. These
+# read the line after the key, the way the plist is laid out.
+plist_value() {
+    sed -n "/<key>$1<\/key>/{n;s|.*<string>\(.*\)</string>.*|\1|p;}" macos/Info.plist
+}
+read_plist() { plist_value CFBundleShortVersionString; }
 read_rc() { sed -n 's/^ *VALUE "ProductVersion", "\([^"]*\)".*/\1/p' win/app.rc; }
 read_rc_binary() { sed -n 's/^PRODUCTVERSION \([0-9,]*\).*/\1/p' win/app.rc; }
 read_zon() { sed -n 's/^ *\.version = "\([^"]*\)".*/\1/p' build.zig.zon; }
@@ -91,9 +97,10 @@ fi
 # CFBundleVersion counts releases. It moves only when the short version moves,
 # so a rerun with the same version keeps the count.
 if [ "$(read_plist)" != "$version" ]; then
-    build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" macos/Info.plist)
-    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $((build + 1))" macos/Info.plist
-    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" macos/Info.plist
+    build=$(plist_value CFBundleVersion)
+    edit macos/Info.plist \
+        -e "/<key>CFBundleShortVersionString<\/key>/{n;s|<string>.*</string>|<string>$version</string>|;}" \
+        -e "/<key>CFBundleVersion<\/key>/{n;s|<string>.*</string>|<string>$((build + 1))</string>|;}"
 fi
 
 quad="$(echo "$version" | tr '.' ',')",0

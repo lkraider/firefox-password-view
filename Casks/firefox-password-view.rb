@@ -1,5 +1,5 @@
 cask "firefox-password-view" do
-  version "1.2.0"
+  version "1.3.0"
   # This is CI's hash. A build done on a different machine produces a
   # different SHA-256. Each machine has its own macOS SDK version
   # installed, and Zig's linker hashes SDK-derived bytes into the
