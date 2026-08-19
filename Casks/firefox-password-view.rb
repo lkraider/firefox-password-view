@@ -1,12 +1,11 @@
 cask "firefox-password-view" do
   version "1.3.0"
-  # This is CI's hash. A build done on a different machine produces a
-  # different SHA-256. Each machine has its own macOS SDK version
-  # installed, and Zig's linker hashes SDK-derived bytes into the
-  # binary's UUID. CI is the machine whose build ships as the release
-  # asset. Read the hash from ci.yml's reproducible-build job. That job
-  # prints it on every push.
-  sha256 "f1e1c6ea762970aa86a8f858b3c33eab116bddb7537979617fe1014fd9640232"
+  # This is CI's hash. The zip holds the Swift binary, and its LC_UUID
+  # follows the macOS SDK installed on the build machine, so a local run
+  # writes a different SHA-256. CI builds the asset a release uploads. Read
+  # the hash from ci.yml's reproducible-build job. That job prints it on
+  # every push.
+  sha256 "5df86c93b89e9eef94288cdb420bf0a2361e6315e02ba6b4f56d0c5afd710c69"
 
   url "https://github.com/lkraider/firefox-password-view/releases/download/v#{version}/FirefoxPasswordView-#{version}-macos.zip"
   name "Firefox Password View"

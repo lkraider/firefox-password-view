@@ -2,13 +2,11 @@ class Ffpw < Formula
   desc "Terminal UI to view a local Firefox profile's saved logins"
   homepage "https://github.com/lkraider/firefox-password-view"
   url "https://github.com/lkraider/firefox-password-view/releases/download/v1.3.0/ffpw-aarch64-macos.tar.gz"
-  # This is CI's hash. A build done on a different machine produces a
-  # different SHA-256. Each machine has its own macOS SDK version
-  # installed, and Zig's linker hashes SDK-derived bytes into the
-  # binary's UUID. CI is the machine whose build ships as the release
-  # asset. Read the hash from ci.yml's reproducible-build job. That job
-  # prints it on every push.
-  sha256 "8aa2af400b31b710140986cedf6a394ab41a7cfc0b5e3ea80a47671b7da826fa"
+  # scripts/release-package.sh writes this tarball byte for byte on any
+  # macOS host, so a local run reproduces this hash. docs/REPRODUCIBLE.md
+  # names the settings. ci.yml's reproducible-build job prints it on every
+  # push, and release.yml compares it with the asset it uploads.
+  sha256 "c4d4fbf4ae70888ac6cc0a510eb861beaf4cf8702c320e0d18ec57608a4c1d68"
   license "MIT"
 
   depends_on arch: :arm64
