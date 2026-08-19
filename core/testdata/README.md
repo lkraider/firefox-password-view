@@ -2,7 +2,7 @@
 
 Each directory holds a `key4.db` and a `logins.json` copied out of a profile
 written by an installed Firefox driven over Marionette by
-`tools/mkfixtures.py`. Every credential in every fixture is synthetic.
+`scripts/test-mkfixtures.py`. Every credential in every fixture is synthetic.
 
 Firefox writes these files, so a test against them checks this reader
 against Firefox's own output. A generator built from this project's own
@@ -17,7 +17,7 @@ reading of the format would only show the reader agrees with itself.
 | `unmigrated` | none | 143.0.4 | a 24-byte 3DES key, no AES-256 key, and 3 `des_ede3_cbc` entries |
 | `migrated` | none | `unmigrated`'s profile, opened once by 152.0.6 | both key rows under one CKA_ID, and every entry re-encrypted to AES-256 |
 
-Firefox writes every fixture above. `tools/mkfixtures.py overflow` writes
+Firefox writes every fixture above. `scripts/test-mkfixtures.py overflow` writes
 `overflow.db` through Python's own `sqlite3`. It is a bare SQLite database
 and it stands outside any profile directory. Its page size is 512 bytes. Its
 rows therefore spill onto overflow pages, and its table b-tree grows 6
@@ -28,9 +28,9 @@ generator write the same bytes. `core/test/oracle.zig` reads the file through
 `core/src/sqlitedb.zig` and through the system sqlite3, then compares every
 column.
 
-`tools/mkfixtures.py fanout` writes `fanout.db`. Python assembles those 23
-pages byte by byte, since sqlite3 refuses to write a b-tree that reaches one
-page twice. The file declares a `metaData` table with columns
+`scripts/test-mkfixtures.py fanout` writes `fanout.db`. Python assembles
+those 23 pages byte by byte, since sqlite3 refuses to write a b-tree that
+reaches one page twice. The file declares a `metaData` table with columns
 `id,item1,item2`, so `keydb.load` on it reaches the b-tree walk. Every
 interior page names the next page 72 times, once per cell and once as the
 rightmost child, and the walk therefore reaches 72<sup>21</sup> leaves. The
@@ -38,7 +38,7 @@ page budget in `RowIterator.push` stops it after 23 pushes and returns
 `error.Corrupt`. sqlite3 reports `database disk image is malformed` for this
 file, so `core/test/oracle.zig` leaves it out of its fixture list.
 
-`tools/mkfixtures.py page64k` writes `page64k.db` through Python's own
+`scripts/test-mkfixtures.py page64k` writes `page64k.db` through Python's own
 `sqlite3` with `PRAGMA page_size = 65536`. Header offset 16 is two bytes wide,
 so SQLite stores that size as the value 1 and `sqlitedb.Db.open` maps it back.
 Every `key4.db` uses 32768 bytes, so a fixture Firefox writes reaches that
@@ -48,8 +48,8 @@ back to `min_local`. A 75005-byte record makes `local` take `k`. Each row
 spills onto one overflow page. `core/test/oracle.zig` reads it, so
 `row_buf_len` there holds 128 KB.
 
-`tools/mkfixtures.py reserved` writes `reserved.db`. Python assembles its 3
-pages byte by byte. Header offset 20 reserves a tail on every page for an
+`scripts/test-mkfixtures.py reserved` writes `reserved.db`. Python assembles
+its 3 pages byte by byte. Header offset 20 reserves a tail on every page for an
 extension such as SEE, and the payload arithmetic in `readPayload` counts
 `page_size` minus that tail. Firefox loads no extension, so every `key4.db`
 stores 0 there, and 0 makes `usable` and `page_size` equal. This file reserves
@@ -78,23 +78,23 @@ account is used to build these fixtures.
 `unmigrated` needs Firefox 143.0.4, from
 `ftp.mozilla.org/pub/firefox/releases/143.0.4/mac/en-US/`, since Firefox 144
 adds the AES-256 key. `migrated` is `unmigrated`'s profile directory,
-copied and then opened once by the installed Firefox 152 with `mkfixtures.py
---profile <copy> migrate`. Nothing is added to it.
+copied and then opened once by the installed Firefox 152 with
+`test-mkfixtures.py --profile <copy> migrate`. Nothing is added to it.
 
 Regenerate a fixture with, for example:
 
 ```
-python3 tools/mkfixtures.py --profile /tmp/scratch fresh
+python3 scripts/test-mkfixtures.py --profile /tmp/scratch fresh
 cp /tmp/scratch/key4.db /tmp/scratch/logins.json core/testdata/fresh/
 ```
 
 Regenerate the bare databases in place with:
 
 ```
-python3 tools/mkfixtures.py overflow
-python3 tools/mkfixtures.py fanout
-python3 tools/mkfixtures.py page64k
-python3 tools/mkfixtures.py reserved
+python3 scripts/test-mkfixtures.py overflow
+python3 scripts/test-mkfixtures.py fanout
+python3 scripts/test-mkfixtures.py page64k
+python3 scripts/test-mkfixtures.py reserved
 ```
 
 `core/src/tests.zig` asserts each fixture's password-check decrypts under its

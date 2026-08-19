@@ -16,7 +16,7 @@ build-*.log.err
 # Swift Package Manager build artifacts for macos/.
 macos/.build/
 
-# scripts/package-release.sh's output directory.
+# scripts/release-package.sh's output directory.
 dist/
 
 # make-icon.swift writes this next to the .icns, to look at.
@@ -29,6 +29,6 @@ macos/Icon.icns.preview.png
 logins*.json
 
 # Fixtures under here hold synthetic credentials only, written by real
-# Firefox over Marionette. See tools/mkfixtures.py.
+# Firefox over Marionette. See scripts/test-mkfixtures.py.
 !core/testdata/**/*.db
 !core/testdata/**/logins.json

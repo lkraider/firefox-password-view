@@ -177,19 +177,27 @@ build.zig
 tui/src/        the libvaxis TUI, imports store.zig through root.zig
 macos/          the SwiftUI app, a Swift package linking core.zig's static library
 win/src/        the Win32 app, importing the core module directly
-scripts/
-  screenshots.sh       writes the three README images
-  wine-check.sh        asserts the Windows app's behaviour under wine
-  wine-shutdown.sh     ends a wine prefix's session and kills its helpers
-  win-launch-check.ps1 launches the Windows exe on a CI runner
-  linux-launch-check.sh drives the ffpw paths that run without a terminal
-  win-build-hash.ps1   builds the Windows exe and records its SHA-256
-  compare-sums.sh      asserts every build host recorded one sum per target
-  set-version.sh       writes the release version, or compares it with a tag
-  winid.swift          lists every on-screen window and its bounds
-  macinput.swift       posts synthetic mouse and keyboard events through CGEvent
-  pixdiff.swift        counts differing pixels in one rectangle of two captures
+scripts/               every file carries the prefix of the group it serves
+  ci-compare-sums.sh      asserts every build host recorded one sum per target
+  docs-screenshots.sh     writes the README images
+  docs-window-list.swift  lists every on-screen window and its bounds
+  linux-launch-check.sh   drives the ffpw paths that run without a terminal
+  release-package.sh      builds and archives every published artifact
+  release-set-version.sh  writes the release version, or compares it with a tag
+  test-mkfixtures.py      writes every fixture under core/testdata/
+  win-build-hash.ps1      builds the Windows exe and records its SHA-256
+  win-launch-check.ps1    launches the Windows exe on a CI runner
+  win-make-ico.py         writes win/icon.ico from macos/Icon.icns
+  wine-check.sh           asserts the Windows app's behaviour under wine
+  wine-input.swift        posts synthetic mouse and keyboard events
+  wine-pixdiff.swift      counts differing pixels in one rectangle
+  wine-shutdown.sh        ends a wine prefix's session and kills its helpers
 ```
+
+Every script here needs a Mac to run, so a `mac-` prefix would mark all of
+them and separate none. `docs-window-list.swift` takes the prefix of its
+larger consumer: `docs-screenshots.sh` compiles it for all three of its
+captures, and `wine-check.sh` compiles it too.
 
 Inside `win/src/`, `model.zig` holds every rule about what a row shows and
 what an activation means. It imports `core` and `std` alone, so `zig build
@@ -199,7 +207,7 @@ the clipboard writer. `text.zig` converts UTF-8 into a caller-sized UTF-16
 buffer, and its tests run on the build host too. `crash.zig` holds the panic
 handler.
 
-The three Swift files above are one-shot tools. `screenshots.sh` and
+The Swift files above are one-shot tools. `docs-screenshots.sh` and
 `wine-check.sh` each compile the ones they need with `swiftc -O` into their
 own work directory.
 
@@ -395,21 +403,22 @@ from another host stays out of reach.
 `build.zig.zon`'s `.version` is the one place the version string lives.
 `build.zig` imports the manifest and hands that string to `tui_mod` as
 `build_options.version`. `ffpw --version` prints it.
-`scripts/set-version.sh` writes the same string into `macos/Info.plist`,
-`win/app.rc`, `CHANGELOG.md`, `Formula/ffpw.rb` and the cask. `release.yml`
-runs `set-version.sh --check` against the pushed tag, so a file left at the
-old version stops the release before it uploads anything.
+`scripts/release-set-version.sh` writes the same string into
+`macos/Info.plist`, `win/app.rc`, `CHANGELOG.md`, `Formula/ffpw.rb` and the
+cask. `release.yml`
+runs `release-set-version.sh --check` against the pushed tag, so a file left
+at the old version stops the release before it uploads anything.
 
 Two build hosts produce the same bytes for each cross-compiled target, and
 `ci.yml` asserts it. Each build job writes its binary's SHA-256 to the run
 summary and publishes it as a job output. `reproducible-build` records every
-cross target on `macos-15`, from the binaries `scripts/package-release.sh`
+cross target on `macos-15`, from the binaries `scripts/release-package.sh`
 put in the archives. `windows-test` builds `x86_64` twice in parallel on
 `windows-latest`. `windows-arm-test` cross-compiles `arm64` on
 `windows-11-arm` through the emulated x86_64 toolchain. `linux-test` builds
 `x86_64-linux-musl` on `ubuntu-latest` and `linux-arm-test` builds
 `aarch64-linux-musl` on `ubuntu-24.04-arm`. The `compare-sums` job waits for
-all of them and runs `scripts/compare-sums.sh` once per target. An empty sum
+all of them and runs `scripts/ci-compare-sums.sh` once per target. An empty sum
 fails that job, since two missing values compare equal.
 
 `windows-test` also fails when its own two builds disagree. A query carrying
@@ -472,7 +481,7 @@ HIWORD of `wParam` is 1 for an accelerator and 0 for a menu item. The
 accelerator case.
 
 The `x86_64-windows-gnu` exe runs under wine on macOS.
-`scripts/screenshots.sh win` writes the README image there, and
+`scripts/docs-screenshots.sh win` writes the README image there, and
 `scripts/wine-check.sh` asserts behaviour and exits non-zero on a failure.
 Measured under wine 11.15: the profile list, the search filter, reveal,
 copy, the 30-second clipboard clear, the 30-second re-mask, the

@@ -2,7 +2,7 @@
 //
 // System Events leaves `click at` unposted for a wine window, and it delivers
 // Option as a literal character. Every synthetic input that has to reach wine
-// goes through the CGEvent HID tap here. scripts/screenshots.sh and
+// goes through the CGEvent HID tap here. scripts/docs-screenshots.sh and
 // scripts/wine-check.sh both compile this file with `swiftc -O`.
 //
 // Usage:
@@ -12,7 +12,7 @@
 //   macinput key <keycode> [alt|shift|cmd|ctrl ...]
 //
 // Every coordinate is a screen point with a top-left origin, the same
-// coordinates scripts/winid.swift reports. A keycode is a Carbon virtual
+// coordinates scripts/docs-window-list.swift reports. A keycode is a Carbon virtual
 // keycode: 35 is P, 36 is Return, 48 is Tab, 53 is Escape, 125 is Down.
 //
 // Both TCC permissions belong to the terminal that runs the caller.

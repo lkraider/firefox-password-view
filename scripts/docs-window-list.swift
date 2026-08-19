@@ -1,7 +1,7 @@
 // Lists every on-screen window as one tab-separated line.
 //
 // CGWindowListCopyWindowInfo has no CLI. JXA's ObjC bridge does not resolve
-// its signature, so scripts/screenshots.sh and scripts/wine-check.sh compile
+// its signature, so scripts/docs-screenshots.sh and scripts/wine-check.sh compile
 // this file with `swiftc -O` and read its output.
 //
 // "<windowNumber>\t<ownerPID>\t<ownerName>\t<windowName>\t<x>\t<y>\t<w>\t<h>"

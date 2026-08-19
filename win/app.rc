@@ -39,7 +39,7 @@ CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
 IDI_APP ICON "icon.ico"
 
 /* The Details tab of the exe's Properties dialog reads this block, and showed
-   no version before it existed. scripts/set-version.sh writes the version
+   no version before it existed. scripts/release-set-version.sh writes the version
    fields below. */
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION 1,3,0,0

@@ -7,14 +7,14 @@ would show that the reader agrees with itself. See
 core/testdata/README.md for what each fixture covers.
 
 Usage:
-    tools/mkfixtures.py fresh       --profile core/testdata/fresh/profile
-    tools/mkfixtures.py primary     --profile core/testdata/primary/profile
-    tools/mkfixtures.py sync-shaped --profile core/testdata/sync-shaped/profile
-    tools/mkfixtures.py migrate     --profile core/testdata/migrated/profile
-    tools/mkfixtures.py overflow
-    tools/mkfixtures.py fanout
-    tools/mkfixtures.py page64k
-    tools/mkfixtures.py reserved
+    scripts/test-mkfixtures.py fresh       --profile core/testdata/fresh/profile
+    scripts/test-mkfixtures.py primary     --profile core/testdata/primary/profile
+    scripts/test-mkfixtures.py sync-shaped --profile core/testdata/sync-shaped/profile
+    scripts/test-mkfixtures.py migrate     --profile core/testdata/migrated/profile
+    scripts/test-mkfixtures.py overflow
+    scripts/test-mkfixtures.py fanout
+    scripts/test-mkfixtures.py page64k
+    scripts/test-mkfixtures.py reserved
 
 The first four subcommands launch Firefox, drive it, and quit it. Firefox
 must be fully closed before the caller reads key4.db or logins.json, so this

@@ -207,13 +207,13 @@ The released zips are built at `ReleaseSafe`. That mode keeps the bounds and
 alignment checks over the hand-written `key4.db` reader.
 
 `win/icon.ico` is committed, and a build reads that file. `python3
-scripts/make-ico.py` rewrites it from `macos/Icon.icns`.
+scripts/win-make-ico.py` rewrites it from `macos/Icon.icns`.
 
 The macOS app is a separate Swift package. See
 [`macos/README.md`](macos/README.md) for how to build and test it.
 
-`scripts/screenshots.sh` regenerates the three images above. Its `win`
-target needs wine.
+`scripts/docs-screenshots.sh` regenerates the images above. Its `win` target
+needs wine.
 
 ## Layout
 
@@ -222,7 +222,7 @@ core/       key4.db and logins.json decryption, and the C ABI
 tui/        the terminal UI, on libvaxis
 macos/      the SwiftUI app
 win/        the Win32 app
-tools/      the fixture generator
+scripts/    release, CI, fixture and screenshot tooling
 ```
 
 [`docs/DESIGN.md`](docs/DESIGN.md) has the on-disk format, the reasoning

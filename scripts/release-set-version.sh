@@ -1,8 +1,8 @@
 #!/bin/sh
 # Writes the release version into every file that holds it, or compares them.
 #
-#   scripts/set-version.sh 1.2.0            write
-#   scripts/set-version.sh --check 1.2.0    compare, exit 1 on a mismatch
+#   scripts/release-set-version.sh 1.2.0            write
+#   scripts/release-set-version.sh --check 1.2.0    compare, exit 1 on a mismatch
 #
 # .github/workflows/release.yml runs the check against the pushed tag. A file
 # left at the old version stops the release before it uploads anything.

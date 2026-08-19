@@ -20,12 +20,12 @@
 #   Accessibility                     for the keystrokes that drive the TUI
 #
 # Usage:
-#   scripts/screenshots.sh            all three images
-#   scripts/screenshots.sh tui        the terminal UI only
-#   scripts/screenshots.sh app        the macOS app only
-#   scripts/screenshots.sh win        the Windows app only, under wine
-#   FFPW_SKIP_BUILD=1 scripts/screenshots.sh   reuse the existing builds
-#   FFPW_WINE=/path/to/wine scripts/screenshots.sh win
+#   scripts/docs-screenshots.sh            all three images
+#   scripts/docs-screenshots.sh tui        the terminal UI only
+#   scripts/docs-screenshots.sh app        the macOS app only
+#   scripts/docs-screenshots.sh win        the Windows app only, under wine
+#   FFPW_SKIP_BUILD=1 scripts/docs-screenshots.sh   reuse the existing builds
+#   FFPW_WINE=/path/to/wine scripts/docs-screenshots.sh win
 set -eu
 
 target="${1:-all}"
@@ -81,21 +81,21 @@ fi
 # scripts/wine-check.sh compiles the same file. See its header for what the
 # columns hold.
 
-swiftc -O -o "$work/winid" "$repo_root/scripts/winid.swift"
+swiftc -O -o "$work/window-list" "$repo_root/scripts/docs-window-list.swift"
 
 # window_id_for_pid <pid> -> window number on stdout, empty when absent
 window_id_for_pid() {
-    "$work/winid" | awk -F'\t' -v p="$1" '$2==p {print $1; exit}'
+    "$work/window-list" | awk -F'\t' -v p="$1" '$2==p {print $1; exit}'
 }
 
 # window_bounds_for_pid <pid> -> "x y w h" on stdout, empty when absent
 window_bounds_for_pid() {
-    "$work/winid" | awk -F'\t' -v p="$1" '$2==p {print $5, $6, $7, $8; exit}'
+    "$work/window-list" | awk -F'\t' -v p="$1" '$2==p {print $5, $6, $7, $8; exit}'
 }
 
 # window_id_for_terminal -> window number of the Terminal window titled $term_title
 window_id_for_terminal() {
-    "$work/winid" | awk -F'\t' -v t="$term_title" '$3=="Terminal" && index($4, t) {print $1; exit}'
+    "$work/window-list" | awk -F'\t' -v t="$term_title" '$3=="Terminal" && index($4, t) {print $1; exit}'
 }
 
 # capture <window-id> <output-path>
@@ -167,7 +167,7 @@ swiftc -O -o "$work/trimtop" "$work/trimtop.swift"
 # shoot_win pulls the bottom edge up, so the image ends near the last row.
 # scripts/wine-check.sh compiles the same file for its right-clicks.
 
-swiftc -O -o "$work/macinput" "$repo_root/scripts/macinput.swift"
+swiftc -O -o "$work/input" "$repo_root/scripts/wine-input.swift"
 
 # --- sandbox profile -------------------------------------------------------
 
@@ -353,7 +353,7 @@ INI
     # that empty, so the bottom edge comes up to $win_height points first.
     set -- $(window_bounds_for_pid "$pid")
     [ $# -eq 4 ] || { echo "no bounds for pid $pid" >&2; exit 1; }
-    "$work/macinput" drag "$(($1 + $3 - 2))" "$(($2 + $4 - 2))" \
+    "$work/input" drag "$(($1 + $3 - 2))" "$(($2 + $4 - 2))" \
                           "$(($1 + $3 - 2))" "$(($2 + win_height))"
     sleep 1
 

@@ -179,7 +179,7 @@ test "pbes2 rejects a scheme it does not implement" {
 }
 
 // The installed Firefox writes these fixtures over Marionette, so they
-// carry the format Firefox produces. See tools/mkfixtures.py. A profile
+// carry the format Firefox produces. See scripts/test-mkfixtures.py. A profile
 // from this machine dropped into core/testdata fails these tests, since
 // the documented passwords do not unlock it.
 
@@ -433,7 +433,7 @@ test "the reserved-bytes fixture returns the payload the tail excludes" {
     const row = (try it.next()) orelse return error.NoRow;
     const bytes = row.column(body) orelse return error.NoColumn;
 
-    // tools/mkfixtures.py fills the blob with (position * 7) % 251. The record
+    // scripts/test-mkfixtures.py fills the blob with (position * 7) % 251. The record
     // totals 600 bytes and its own header takes 4, so 596 reach this column.
     try testing.expectEqual(@as(usize, 596), bytes.len);
     for (bytes, 0..) |b, i| try testing.expectEqual(@as(u8, @intCast((i * 7) % 251)), b);

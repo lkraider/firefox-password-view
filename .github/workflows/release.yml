@@ -17,9 +17,9 @@ jobs:
       - uses: actions/checkout@v7
 
       # The tag names the artifacts. macos/Info.plist holds the version the app
-      # reports. set-version.sh compares the tag with every such file.
+      # reports. release-set-version.sh compares the tag with every such file.
       - name: Check the tag against every file that holds the version
-        run: ./scripts/set-version.sh --check "${GITHUB_REF_NAME#v}"
+        run: ./scripts/release-set-version.sh --check "${GITHUB_REF_NAME#v}"
 
       - name: Cache the pinned Zig toolchain
         id: zig-cache
@@ -37,7 +37,7 @@ jobs:
           rm zig.tar.xz
 
       - name: Package the release artifacts
-        run: ./scripts/package-release.sh "${GITHUB_REF_NAME#v}" dist
+        run: ./scripts/release-package.sh "${GITHUB_REF_NAME#v}" dist
 
       # LC_UUID and the code signature still follow the installed macOS SDK.
       # This file records what the runner had, so a hash that moves between

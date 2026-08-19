@@ -1,7 +1,7 @@
 #!/bin/sh
 # Asserts that every build host produced the same exe for one target.
 #
-# Usage: scripts/compare-sums.sh <target> <host>=<sum> <host>=<sum> ...
+# Usage: scripts/ci-compare-sums.sh <target> <host>=<sum> <host>=<sum> ...
 #
 # ci.yml's compare-sums job runs this once per Windows target. Each build job
 # publishes its sum as a job output, and that job needs all three, so the

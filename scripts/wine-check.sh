@@ -1,6 +1,6 @@
 #!/bin/sh
 # Asserts the Windows app's behaviour under wine and exits non-zero on a
-# failure. scripts/screenshots.sh writes images. This script reads results.
+# failure. scripts/docs-screenshots.sh writes images. This script reads results.
 #
 # Every check launches zig-out/bin/FirefoxPasswordView.exe against a copy of
 # core/testdata/sync-shaped, drives it with synthetic input, and reads the
@@ -8,7 +8,7 @@
 # different password, so pbpaste says which row acted.
 #
 # escape-hides and alt-mnemonic have no clipboard signal. Both compare two
-# captures of the same window through scripts/pixdiff.swift.
+# captures of the same window through scripts/wine-pixdiff.swift.
 #
 # Row order in the list, and the password each row holds:
 #   0  https://example.com              fixture-pass-1
@@ -79,18 +79,18 @@ fi
     -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseSafe -Doracle=false)
 [ -x "$win_exe" ] || { echo "missing $win_exe" >&2; exit 1; }
 
-swiftc -O -o "$work/winid" "$repo_root/scripts/winid.swift"
-swiftc -O -o "$work/macinput" "$repo_root/scripts/macinput.swift"
-swiftc -O -o "$work/pixdiff" "$repo_root/scripts/pixdiff.swift"
+swiftc -O -o "$work/window-list" "$repo_root/scripts/docs-window-list.swift"
+swiftc -O -o "$work/input" "$repo_root/scripts/wine-input.swift"
+swiftc -O -o "$work/pixdiff" "$repo_root/scripts/wine-pixdiff.swift"
 
 # --- window helpers --------------------------------------------------------
 
 window_id_for_pid() {
-    "$work/winid" | awk -F'\t' -v p="$1" '$2==p {print $1; exit}'
+    "$work/window-list" | awk -F'\t' -v p="$1" '$2==p {print $1; exit}'
 }
 
 window_bounds_for_pid() {
-    "$work/winid" | awk -F'\t' -v p="$1" '$2==p {print $5, $6, $7, $8; exit}'
+    "$work/window-list" | awk -F'\t' -v p="$1" '$2==p {print $5, $6, $7, $8; exit}'
 }
 
 # --- wine prefix -----------------------------------------------------------
@@ -164,7 +164,7 @@ quit_app() {
 # key <keycode> [modifiers...]
 # macinput already waits 60 ms after each of the two events it posts.
 key() {
-    "$work/macinput" key "$@"
+    "$work/input" key "$@"
     sleep 0.2
 }
 
@@ -286,7 +286,7 @@ check_copy_from_row_menu() {
     key 48
     key 125
     set -- $(point_for_row 0)
-    "$work/macinput" rclick "$1" "$2"
+    "$work/input" rclick "$1" "$2"
     sleep 1
     # The popup draws under the cursor. Down twice reaches Copy password, and
     # Return picks it.
@@ -316,7 +316,7 @@ check_rclick_unselected() {
     key 48
     key 125         # row 0 is selected
     set -- $(point_for_row 2)
-    "$work/macinput" rclick "$1" "$2"
+    "$work/input" rclick "$1" "$2"
     # TrackPopupMenu runs its own message loop. A Ctrl+C that arrives while it
     # is up reaches the popup, so this waits for the popup to close before it
     # sends one.

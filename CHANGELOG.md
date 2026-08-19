@@ -10,7 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `ffpw-aarch64-linux.tar.gz`, both cross-compiled from macOS against musl
   at `ReleaseSafe`. `tui_mod` links no C library, so each one is static and
   runs on any distro. `ci.yml` builds both natively too and
-  `scripts/compare-sums.sh` compares the two hosts.
+  `scripts/ci-compare-sums.sh` compares the two hosts.
 - `ffpw` finds the Linux profile directory. It tries `~/.mozilla/firefox`,
   then the Ubuntu snap root, then the Flatpak root, and reads the first one
   holding a `profiles.ini`. One run reads one root, because each Firefox
@@ -26,7 +26,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   after the UI exits, with no trailing newline, and the last `y` of the run
   is what a reader receives. On a terminal it writes nothing.
 - `ffpw --version` prints the version and exits 0. The string comes from
-  `build.zig.zon`, the file `scripts/set-version.sh` writes and
+  `build.zig.zon`, the file `scripts/release-set-version.sh` writes and
   `release.yml` checks against the pushed tag.
 - `scripts/linux-launch-check.sh` drives the paths that run without a
   terminal and exits non-zero on a failure. `ci.yml` runs it on

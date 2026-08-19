@@ -21,12 +21,12 @@
 # Build 1's exe lands in -Prefix, where scripts/win-launch-check.ps1 reads it.
 #
 # The target is explicit, because a native build on a Windows host resolves to
-# the msvc ABI and scripts/package-release.sh ships the gnu one. build.zig pins
+# the msvc ABI and scripts/release-package.sh ships the gnu one. build.zig pins
 # the cpu to a baseline, so the target string decides the code generation and
 # the sum is comparable across build hosts.
 #
 # Each run appends its sum to the job summary and to GITHUB_OUTPUT.
-# reproducible-build appends the sums of the exes scripts/package-release.sh
+# reproducible-build appends the sums of the exes scripts/release-package.sh
 # put in the zips, and ci.yml's compare-sums job compares one sum per target
 # across every build host.
 [CmdletBinding()]

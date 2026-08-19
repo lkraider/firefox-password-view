@@ -18,7 +18,7 @@ const fixtures = [_][]const u8{
     "core/testdata/sync-shaped/key4.db",
     "core/testdata/unmigrated/key4.db",
     "core/testdata/two-profiles/Profiles/real.default-release/key4.db",
-    // Written by tools/mkfixtures.py with a 512-byte page, so its rows spill
+    // Written by scripts/test-mkfixtures.py with a 512-byte page, so its rows spill
     // to overflow pages and its b-tree grows an interior page. No key4.db
     // reaches either branch.
     "core/testdata/overflow.db",

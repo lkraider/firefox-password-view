@@ -84,7 +84,7 @@ jobs:
       # Three zig processes at once: two builds of the exe and the test suite.
       # Measured on a development Mac: 19 seconds of wall clock for 76 of cpu.
       #
-      # The tests run at ReleaseSafe, which scripts/package-release.sh builds
+      # The tests run at ReleaseSafe, which scripts/release-package.sh builds
       # with. Measured on Zig 0.16.0: ReleaseSafe fills undefined memory with
       # 0xAA, as Debug does, and keeps the bounds, overflow and alignment
       # checks. It also runs the optimizer, so this step tests the code
@@ -107,7 +107,7 @@ jobs:
     # can load an ARM64 PE.
     #
     # This job drives the x86_64 toolchain under Windows-on-ARM emulation and
-    # cross-compiles, the way scripts/package-release.sh cross-compiles from
+    # cross-compiles, the way scripts/release-package.sh cross-compiles from
     # macOS. Zig 0.16.0's own aarch64-windows build answers `zig version` and
     # `zig env`, then dies on `zig build` with exit -1073741819, an access
     # violation, and prints nothing. `zig build test` therefore runs on
@@ -255,32 +255,32 @@ jobs:
 
       - name: x86_64-windows-gnu, from macos-15 and windows-latest
         run: >
-          scripts/compare-sums.sh x86_64-windows-gnu
+          scripts/ci-compare-sums.sh x86_64-windows-gnu
           "macos-15=${{ needs.reproducible-build.outputs.win_x86_64 }}"
           "windows-latest=${{ needs.windows-test.outputs.sum }}"
 
       - name: aarch64-windows-gnu, from macos-15 and windows-11-arm
         run: >
-          scripts/compare-sums.sh aarch64-windows-gnu
+          scripts/ci-compare-sums.sh aarch64-windows-gnu
           "macos-15=${{ needs.reproducible-build.outputs.win_arm64 }}"
           "windows-11-arm=${{ needs.windows-arm-test.outputs.sum }}"
 
       - name: x86_64-linux-musl, from macos-15 and ubuntu-latest
         run: >
-          scripts/compare-sums.sh x86_64-linux-musl
+          scripts/ci-compare-sums.sh x86_64-linux-musl
           "macos-15=${{ needs.reproducible-build.outputs.linux_x86_64 }}"
           "ubuntu-latest=${{ needs.linux-test.outputs.sum }}"
 
       - name: aarch64-linux-musl, from macos-15 and ubuntu-24.04-arm
         run: >
-          scripts/compare-sums.sh aarch64-linux-musl
+          scripts/ci-compare-sums.sh aarch64-linux-musl
           "macos-15=${{ needs.reproducible-build.outputs.linux_arm64 }}"
           "ubuntu-24.04-arm=${{ needs.linux-arm-test.outputs.sum }}"
 
   reproducible-build:
     # Packages the release artifacts twice from a clean state and diffs
     # them. This catches a regression in build.zig's strip, bundle.sh's
-    # -gnone, or the tar/ditto flags in scripts/package-release.sh. Each
+    # -gnone, or the tar/ditto flags in scripts/release-package.sh. Each
     # of those exists to keep this build byte-for-byte reproducible.
     runs-on: macos-15
 
@@ -309,7 +309,7 @@ jobs:
           rm zig.tar.xz
 
       - name: Package once
-        run: ./scripts/package-release.sh 0.0.0-repro-check dist1
+        run: ./scripts/release-package.sh 0.0.0-repro-check dist1
 
       # The binaries the packaging step above put in the archives.
       # compare-sums reads these through this job's outputs, and the clean
@@ -328,11 +328,11 @@ jobs:
           done
 
       - name: Clean every build artifact
-        # package-release.sh gives each cross build its own cache and prefix.
+        # release-package.sh gives each cross build its own cache and prefix.
         run: rm -rf .zig-cache zig-out macos/.build .zig-cache-* out-*
 
       - name: Package again
-        run: ./scripts/package-release.sh 0.0.0-repro-check dist2
+        run: ./scripts/release-package.sh 0.0.0-repro-check dist2
 
       - name: Compare
         run: |

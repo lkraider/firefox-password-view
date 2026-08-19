@@ -3,7 +3,7 @@
 
 Run it after changing the artwork:
 
-    python3 scripts/make-ico.py
+    python3 scripts/win-make-ico.py
 
 The .ico is committed, so a build needs neither this script nor macOS.
 
