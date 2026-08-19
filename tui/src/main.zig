@@ -2,6 +2,7 @@
 //! a time, copies the row under the cursor, and wipes on quit.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 
@@ -108,6 +109,10 @@ const Model = struct {
     gpa: std.mem.Allocator,
     io: std.Io,
     profile_path: []const u8,
+    /// `main` reads WAYLAND_DISPLAY and DISPLAY and picks the chain.
+    /// copySelected receives a vxfw.EventContext, and that struct carries no
+    /// environment.
+    helpers: []const []const []const u8,
 
     password_field: SecretField,
     password_error: bool = false,
@@ -139,17 +144,30 @@ const Model = struct {
     reveal_scratch: [8192]u8 = undefined,
     reveal_out: [8192]u8 = undefined,
 
+    /// Filled by `y` when stdout is a pipe or a file. `main` writes it once,
+    /// after app.run returns. Bytes already in the pipe cannot be retracted.
+    /// A write per press would send every password of the run, with nothing
+    /// between them.
+    stdout_out: [8192]u8 = undefined,
+    stdout_len: usize = 0,
+
     status: [160]u8 = undefined,
     status_len: usize = 0,
     status_line: vxfw.Text = .{ .text = "", .softwrap = false },
 
-    fn init(gpa: std.mem.Allocator, io: std.Io, profile_path: []const u8) !*Model {
+    fn init(
+        gpa: std.mem.Allocator,
+        io: std.Io,
+        profile_path: []const u8,
+        helpers: []const []const []const u8,
+    ) !*Model {
         const model = try gpa.create(Model);
         errdefer gpa.destroy(model);
         model.* = .{
             .gpa = gpa,
             .io = io,
             .profile_path = profile_path,
+            .helpers = helpers,
             .password_field = SecretField.init(gpa),
             .search_field = .init(gpa),
         };
@@ -164,6 +182,7 @@ const Model = struct {
         if (self.revealed_index != null) self.hideRevealed();
         std.crypto.secureZero(u8, &self.reveal_scratch);
         std.crypto.secureZero(u8, &self.reveal_out);
+        std.crypto.secureZero(u8, &self.stdout_out);
         self.password_field.deinit();
         self.search_field.deinit();
         self.match_indices.deinit(self.gpa);
@@ -334,7 +353,16 @@ const Model = struct {
             return;
         };
         try ctx.copyToClipboard(plain);
-        try copyViaPbcopy(self.io, self.gpa, plain);
+        copyViaHelper(self.io, self.helpers, plain);
+
+        // A terminal on stdout puts the password into scrollback, into a tmux
+        // buffer and into `script` output.
+        if (!(std.Io.File.stdout().isTty(self.io) catch true)) {
+            const n = @min(plain.len, self.stdout_out.len);
+            @memcpy(self.stdout_out[0..n], plain[0..n]);
+            self.stdout_len = n;
+        }
+
         if (self.revealed_index == null) std.crypto.secureZero(u8, &self.reveal_out);
         self.setStatus("copied", .{});
     }
@@ -500,29 +528,40 @@ const Model = struct {
     }
 };
 
+/// wl-copy connects to a Wayland compositor. xclip and xsel need $DISPLAY.
+/// Both reach a Wayland clipboard through XWayland.
+const wayland_helpers: []const []const []const u8 = &.{
+    &.{"wl-copy"},
+    &.{ "xclip", "-selection", "clipboard" },
+    &.{ "xsel", "--clipboard", "--input" },
+};
+const x11_helpers: []const []const []const u8 = wayland_helpers[1..];
+const macos_helpers: []const []const []const u8 = &.{&.{"pbcopy"}};
+
 /// Best-effort local clipboard write. libvaxis's OSC 52 write (via
 /// ctx.copyToClipboard) never reports failure even when the terminal
-/// ignores it, so this always also shells out to pbcopy. pbcopy works on
-/// every macOS terminal regardless of OSC 52 support.
-fn copyViaPbcopy(io: std.Io, gpa: std.mem.Allocator, text: []const u8) !void {
-    var child = std.process.spawn(io, .{
-        .argv = &.{"pbcopy"},
-        .stdin = .pipe,
-        .stdout = .ignore,
-        .stderr = .ignore,
-    }) catch return;
-    if (child.stdin) |stdin| {
-        var buf: [4096]u8 = undefined;
-        var writer = stdin.writer(io, &buf);
-        writer.interface.writeAll(text) catch {};
-        writer.interface.flush() catch {};
-        stdin.close(io);
-        // wait()'s cleanup closes child.stdin itself if non-null. Closing it
-        // above and leaving this set would double-close the fd.
-        child.stdin = null;
+/// ignores it, so this always also shells out.
+fn copyViaHelper(io: std.Io, helpers: []const []const []const u8, text: []const u8) void {
+    for (helpers) |argv| {
+        var child = std.process.spawn(io, .{
+            .argv = argv,
+            .stdin = .pipe,
+            .stdout = .ignore,
+            .stderr = .ignore,
+        }) catch continue;
+        if (child.stdin) |stdin| {
+            var buf: [4096]u8 = undefined;
+            var writer = stdin.writer(io, &buf);
+            writer.interface.writeAll(text) catch {};
+            writer.interface.flush() catch {};
+            stdin.close(io);
+            // wait()'s cleanup closes child.stdin itself if non-null. Closing
+            // it above and leaving this set would double-close the fd.
+            child.stdin = null;
+        }
+        const term = child.wait(io) catch continue;
+        if (term == .exited and term.exited == 0) return;
     }
-    _ = child.wait(io) catch {};
-    _ = gpa;
 }
 
 fn readProfilesIni(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) ![]u8 {
@@ -642,7 +681,16 @@ pub fn main(init: std.process.Init) !u8 {
         try resolveDefaultProfile(io, gpa, firefox_dir);
     defer gpa.free(profile);
 
-    const model = try Model.init(gpa, io, profile);
+    const helpers: []const []const []const u8 = if (builtin.os.tag == .macos)
+        macos_helpers
+    else if (init.environ_map.get("WAYLAND_DISPLAY") != null)
+        wayland_helpers
+    else if (init.environ_map.get("DISPLAY") != null)
+        x11_helpers
+    else
+        &.{};
+
+    const model = try Model.init(gpa, io, profile, helpers);
     defer model.deinit();
 
     model.tryOpen("");
@@ -652,5 +700,12 @@ pub fn main(init: std.process.Init) !u8 {
     defer app.deinit();
 
     try app.run(model.widget(), .{});
+
+    // std.Io.Threaded installs a SIGPIPE handler (Threaded.zig:1661), so a
+    // reader that exited first surfaces here as error.BrokenPipe. A `try`
+    // would make `ffpw | head -c 5` exit non-zero with a trace.
+    if (model.stdout_len > 0) {
+        write(io, .stdout(), model.stdout_out[0..model.stdout_len]) catch {};
+    }
     return 0;
 }
