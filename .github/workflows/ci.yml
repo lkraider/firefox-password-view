@@ -52,13 +52,6 @@ jobs:
         working-directory: macos
         run: ./scripts/bundle.sh
 
-      # scripts/package-release.sh builds no Linux artifact, and a Linux front
-      # end is planned. The core keeps compiling for this target. The two
-      # Windows targets compile in reproducible-build and in the two Windows
-      # jobs, so this step builds the one target nothing else reaches.
-      - name: Cross-compile the core for Linux
-        run: ./zig/zig-aarch64-macos-${ZIG_VERSION}/zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseSafe
-
 
   windows-test:
     # Runs the core tests and builds the app on the platform it ships for.
@@ -158,12 +151,103 @@ jobs:
         shell: pwsh
         run: .\scripts\win-launch-check.ps1
 
+  linux-test:
+    # The first native run of the suite on Linux. build.zig reads
+    # host_has_sqlite from builtin.os.tag == .macos, so the oracle skips itself
+    # and this runner installs no libsqlite3 headers.
+    runs-on: ubuntu-latest
+
+    outputs:
+      sum: ${{ steps.build.outputs.sum }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache the pinned Zig toolchain
+        id: zig-cache
+        uses: actions/cache@v6
+        with:
+          path: zig/zig-x86_64-linux-${{ env.ZIG_VERSION }}
+          key: zig-x86_64-linux-${{ env.ZIG_VERSION }}
+
+      - name: Install the pinned Zig toolchain
+        if: steps.zig-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p zig
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+          tar -xf zig.tar.xz -C zig
+          rm zig.tar.xz
+
+      - name: zig build test
+        run: ./zig/zig-x86_64-linux-${ZIG_VERSION}/zig build test
+
+      - name: Build the TUI for x86_64-linux-musl and record its sum
+        id: build
+        run: |
+          ./zig/zig-x86_64-linux-${ZIG_VERSION}/zig build \
+            -Dtarget=x86_64-linux-musl -Doptimize=ReleaseSafe
+          # `file` calls a static PIE "static-pie linked", so a grep for
+          # "statically linked" fails on a correct binary. PT_INTERP decides.
+          count=$(readelf -l zig-out/bin/ffpw | grep -c INTERP || true)
+          [ "$count" -eq 0 ] || { echo "ffpw carries a PT_INTERP segment" >&2; exit 1; }
+          sum=$(sha256sum zig-out/bin/ffpw | cut -d' ' -f1)
+          echo "sha256 $sum  x86_64-linux-musl  built on ubuntu-latest"
+          echo "- \`x86_64-linux-musl\` built on \`ubuntu-latest\`: \`$sum\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "sum=$sum" >> "$GITHUB_OUTPUT"
+
+      - name: Drive the paths that run without a terminal
+        run: ./scripts/linux-launch-check.sh zig-out/bin/ffpw
+
+  linux-arm-test:
+    # Runs the aarch64 binary a release ships. ubuntu-24.04-arm is free for a
+    # public repository. There is no ubuntu-latest-arm alias.
+    runs-on: ubuntu-24.04-arm
+
+    outputs:
+      sum: ${{ steps.build.outputs.sum }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache the pinned Zig toolchain
+        id: zig-cache
+        uses: actions/cache@v6
+        with:
+          path: zig/zig-aarch64-linux-${{ env.ZIG_VERSION }}
+          key: zig-aarch64-linux-${{ env.ZIG_VERSION }}
+
+      - name: Install the pinned Zig toolchain
+        if: steps.zig-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p zig
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-aarch64-linux-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+          tar -xf zig.tar.xz -C zig
+          rm zig.tar.xz
+
+      - name: zig build test
+        run: ./zig/zig-aarch64-linux-${ZIG_VERSION}/zig build test
+
+      - name: Build the TUI for aarch64-linux-musl and record its sum
+        id: build
+        run: |
+          ./zig/zig-aarch64-linux-${ZIG_VERSION}/zig build \
+            -Dtarget=aarch64-linux-musl -Doptimize=ReleaseSafe
+          count=$(readelf -l zig-out/bin/ffpw | grep -c INTERP || true)
+          [ "$count" -eq 0 ] || { echo "ffpw carries a PT_INTERP segment" >&2; exit 1; }
+          sum=$(sha256sum zig-out/bin/ffpw | cut -d' ' -f1)
+          echo "sha256 $sum  aarch64-linux-musl  built on ubuntu-24.04-arm"
+          echo "- \`aarch64-linux-musl\` built on \`ubuntu-24.04-arm\`: \`$sum\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "sum=$sum" >> "$GITHUB_OUTPUT"
+
+      - name: Drive the paths that run without a terminal
+        run: ./scripts/linux-launch-check.sh zig-out/bin/ffpw
+
   compare-sums:
     # Asserts that every build host produced the same exe. reproducible-build,
     # windows-test and windows-arm-test each publish one sum per target they
     # build, and `needs` holds this job until all three have finished. Nothing
     # here builds, so the runner that starts fastest runs it.
-    needs: [reproducible-build, windows-test, windows-arm-test]
+    needs: [reproducible-build, windows-test, windows-arm-test, linux-test, linux-arm-test]
     runs-on: ubuntu-latest
 
     steps:
@@ -181,6 +265,18 @@ jobs:
           "macos-15=${{ needs.reproducible-build.outputs.win_arm64 }}"
           "windows-11-arm=${{ needs.windows-arm-test.outputs.sum }}"
 
+      - name: x86_64-linux-musl, from macos-15 and ubuntu-latest
+        run: >
+          scripts/compare-sums.sh x86_64-linux-musl
+          "macos-15=${{ needs.reproducible-build.outputs.linux_x86_64 }}"
+          "ubuntu-latest=${{ needs.linux-test.outputs.sum }}"
+
+      - name: aarch64-linux-musl, from macos-15 and ubuntu-24.04-arm
+        run: >
+          scripts/compare-sums.sh aarch64-linux-musl
+          "macos-15=${{ needs.reproducible-build.outputs.linux_arm64 }}"
+          "ubuntu-24.04-arm=${{ needs.linux-arm-test.outputs.sum }}"
+
   reproducible-build:
     # Packages the release artifacts twice from a clean state and diffs
     # them. This catches a regression in build.zig's strip, bundle.sh's
@@ -189,8 +285,10 @@ jobs:
     runs-on: macos-15
 
     outputs:
-      win_x86_64: ${{ steps.sums.outputs.x86_64 }}
-      win_arm64: ${{ steps.sums.outputs.arm64 }}
+      win_x86_64: ${{ steps.sums.outputs.win_x86_64 }}
+      win_arm64: ${{ steps.sums.outputs.win_arm64 }}
+      linux_x86_64: ${{ steps.sums.outputs.linux_x86_64 }}
+      linux_arm64: ${{ steps.sums.outputs.linux_arm64 }}
 
     steps:
       - uses: actions/checkout@v7
@@ -213,23 +311,25 @@ jobs:
       - name: Package once
         run: ./scripts/package-release.sh 0.0.0-repro-check dist1
 
-      # The exes the packaging step above put in the zips. compare-sums reads
-      # these through this job's outputs, and the clean below deletes the
-      # prefixes that hold them.
-      - name: Record each Windows exe's sum
+      # The binaries the packaging step above put in the archives.
+      # compare-sums reads these through this job's outputs, and the clean
+      # below deletes the prefixes that hold them.
+      - name: Record each cross-compiled binary's sum
         id: sums
         run: |
-          for arch in x86_64 arm64; do
-            sum=$(shasum -a 256 "out-$arch/bin/FirefoxPasswordView.exe" | cut -d' ' -f1)
-            echo "sha256 $sum  windows-$arch  built on macOS ARM64"
-            echo "- \`windows-$arch\` built on \`macOS ARM64\`, the host that builds a release: \`$sum\`" \
+          for pair in "win-x86_64 FirefoxPasswordView.exe" "win-arm64 FirefoxPasswordView.exe" \
+                      "linux-x86_64 ffpw" "linux-arm64 ffpw"; do
+            set -- $pair
+            sum=$(shasum -a 256 "out-$1/bin/$2" | cut -d' ' -f1)
+            echo "sha256 $sum  $1  built on macOS ARM64"
+            echo "- \`$1\` built on \`macOS ARM64\`, the host that builds a release: \`$sum\`" \
               >> "$GITHUB_STEP_SUMMARY"
-            echo "$arch=$sum" >> "$GITHUB_OUTPUT"
+            echo "$(echo "$1" | tr - _)=$sum" >> "$GITHUB_OUTPUT"
           done
 
       - name: Clean every build artifact
-        # package-release.sh gives each Windows build its own cache and prefix.
-        run: rm -rf .zig-cache zig-out macos/.build .zig-cache-x86_64 .zig-cache-arm64 out-x86_64 out-arm64
+        # package-release.sh gives each cross build its own cache and prefix.
+        run: rm -rf .zig-cache zig-out macos/.build .zig-cache-* out-*
 
       - name: Package again
         run: ./scripts/package-release.sh 0.0.0-repro-check dist2
