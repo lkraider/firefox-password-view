@@ -538,7 +538,13 @@ fn resolveDefaultProfile(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []cons
 }
 
 /// One profile per line, name then path, so a shell can cut either field.
+/// The root goes to stderr. `cut -f1` over stdout keeps working.
 fn listProfiles(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) !void {
+    var root_buf: [4096]u8 = undefined;
+    if (std.fmt.bufPrint(&root_buf, "{s}\n", .{firefox_dir})) |line| {
+        write(io, .stderr(), line) catch {};
+    } else |_| {}
+
     const ini = try readProfilesIni(io, gpa, firefox_dir);
     defer gpa.free(ini);
     const list = try profiles.enumerate(gpa, firefox_dir, ini);
@@ -553,6 +559,19 @@ fn listProfiles(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) !vo
     var buf: [4096]u8 = undefined;
     var writer = std.Io.File.stdout().writer(io, &buf);
     for (list) |p| try writer.interface.print("{s}\t{s}\n", .{ p.name, p.path });
+    try writer.interface.flush();
+}
+
+fn reportNoFirefoxDir(io: std.Io, gpa: std.mem.Allocator, home: []const u8) !void {
+    var buf: [1024]u8 = undefined;
+    var writer = std.Io.File.stderr().writer(io, &buf);
+    try writer.interface.writeAll("ffpw: found no profiles.ini under\n");
+    for (profiles.home_relative_dirs) |rel| {
+        const dir = try std.fs.path.join(gpa, &.{ home, rel });
+        defer gpa.free(dir);
+        try writer.interface.print("  {s}\n", .{dir});
+    }
+    try writer.interface.writeAll("pass --profiles-dir <dir> to name a root\n");
     try writer.interface.flush();
 }
 
@@ -582,7 +601,7 @@ pub fn main(init: std.process.Init) !u8 {
     defer gpa.free(argv);
     const options = cli.parse(argv) catch |err| {
         const message = switch (err) {
-            error.MissingValue => "ffpw: --profile needs a path\n",
+            error.MissingValue => "ffpw: --profile and --profiles-dir each need a path\n",
             error.UnknownFlag => "ffpw: unrecognized argument, see ffpw --help\n",
         };
         try write(io, .stderr(), message);
@@ -593,11 +612,21 @@ pub fn main(init: std.process.Init) !u8 {
         return 0;
     }
 
-    const home = init.environ_map.get("HOME") orelse {
-        try write(io, .stderr(), "HOME is not set\n");
-        return 1;
+    const firefox_dir = if (options.profiles_dir) |dir|
+        try gpa.dupe(u8, dir)
+    else root: {
+        const home = init.environ_map.get("HOME") orelse {
+            try write(io, .stderr(), "HOME is not set\n");
+            return 1;
+        };
+        break :root profiles.resolveDir(io, gpa, home) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            error.NoFirefoxDir => {
+                try reportNoFirefoxDir(io, gpa, home);
+                return 1;
+            },
+        };
     };
-    const firefox_dir = try std.fs.path.join(gpa, &.{ home, "Library/Application Support/Firefox" });
     defer gpa.free(firefox_dir);
 
     if (options.list_profiles) {
@@ -605,9 +634,10 @@ pub fn main(init: std.process.Init) !u8 {
         return 0;
     }
 
-    // Duped so one `free` covers both this and resolveDefault's allocation.
+    // A relative --profile joins onto the root the same way a `Path=` value
+    // does. One `free` covers either branch.
     const profile = if (options.profile_path) |path|
-        try gpa.dupe(u8, path)
+        try profiles.resolvePath(gpa, firefox_dir, path)
     else
         try resolveDefaultProfile(io, gpa, firefox_dir);
     defer gpa.free(profile);

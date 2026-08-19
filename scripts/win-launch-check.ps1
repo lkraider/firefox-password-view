@@ -67,6 +67,10 @@ if (-not (Test-Path $Exe)) {
     exit 1
 }
 
+# core.profiles.resolvePath joins a relative --profile onto
+# %APPDATA%\Mozilla\Firefox. This path is relative to the repository root.
+$ProfileDir = (Resolve-Path $ProfileDir).Path
+
 Write-Host "launching $Exe --profile $ProfileDir"
 $proc = Start-Process -FilePath $Exe -ArgumentList "--profile", $ProfileDir -PassThru
 $code = 0
