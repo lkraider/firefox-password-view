@@ -12,6 +12,7 @@ const store_mod = core.store;
 const friendlyMessage = core.messages.friendly;
 
 const cli = @import("args.zig");
+const build_options = @import("build_options");
 
 const masked_password = "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
 
@@ -667,6 +668,10 @@ pub fn main(init: std.process.Init) !u8 {
     };
     if (options.help) {
         try write(io, .stdout(), cli.usage);
+        return 0;
+    }
+    if (options.version) {
+        try write(io, .stdout(), "ffpw " ++ build_options.version ++ "\n");
         return 0;
     }
 

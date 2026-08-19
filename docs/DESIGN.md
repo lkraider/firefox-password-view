@@ -182,6 +182,7 @@ scripts/
   wine-check.sh        asserts the Windows app's behaviour under wine
   wine-shutdown.sh     ends a wine prefix's session and kills its helpers
   win-launch-check.ps1 launches the Windows exe on a CI runner
+  linux-launch-check.sh drives the ffpw paths that run without a terminal
   win-build-hash.ps1   builds the Windows exe and records its SHA-256
   compare-sums.sh      asserts every build host recorded one sum per target
   set-version.sh       writes the release version, or compares it with a tag
@@ -390,6 +391,14 @@ macOS 11 and later, and linking resolves through the SDK stub at
 a host without the Command Line Tools. The C ABI library still links libc,
 and that link needs the same SDK, so cross-compiling `libffpw.a` to macOS
 from another host stays out of reach.
+
+`build.zig.zon`'s `.version` is the one place the version string lives.
+`build.zig` imports the manifest and hands that string to `tui_mod` as
+`build_options.version`. `ffpw --version` prints it.
+`scripts/set-version.sh` writes the same string into `macos/Info.plist`,
+`win/app.rc`, `CHANGELOG.md`, `Formula/ffpw.rb` and the cask. `release.yml`
+runs `set-version.sh --check` against the pushed tag, so a file left at the
+old version stops the release before it uploads anything.
 
 Two build hosts produce the same bytes for each cross-compiled target, and
 `ci.yml` asserts it. Each build job writes its binary's SHA-256 to the run

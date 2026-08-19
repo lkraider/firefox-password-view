@@ -8,6 +8,7 @@ pub const Options = struct {
     /// the pick `profiles.resolveDefault` returns.
     profile_path: ?[]const u8 = null,
     list_profiles: bool = false,
+    version: bool = false,
     help: bool = false,
 };
 
@@ -20,6 +21,7 @@ pub const usage =
     \\  ffpw                     open the profile Firefox uses
     \\  ffpw --profile <path>    open the profile in <path>
     \\  ffpw --list-profiles     print every profile in profiles.ini
+    \\  ffpw --version           print the version
     \\  ffpw --help              print this text
     \\
     \\Keys:
@@ -45,6 +47,8 @@ pub fn parse(argv: []const []const u8) Error!Options {
             options.help = true;
         } else if (std.mem.eql(u8, arg, "--list-profiles")) {
             options.list_profiles = true;
+        } else if (std.mem.eql(u8, arg, "--version")) {
+            options.version = true;
         } else if (std.mem.eql(u8, arg, "--profile")) {
             i += 1;
             if (i >= argv.len) return error.MissingValue;
@@ -64,6 +68,7 @@ test "no arguments leaves every field at its default" {
     const options = try parse(&.{});
     try std.testing.expect(options.profile_path == null);
     try std.testing.expect(!options.list_profiles);
+    try std.testing.expect(!options.version);
     try std.testing.expect(!options.help);
 }
 
@@ -82,10 +87,16 @@ test "--profile with nothing after it reports MissingValue" {
     try std.testing.expectError(error.MissingValue, parse(&.{"--profile="}));
 }
 
-test "--list-profiles and --help set their flags" {
+test "--list-profiles, --version and --help set their flags" {
     try std.testing.expect((try parse(&.{"--list-profiles"})).list_profiles);
+    try std.testing.expect((try parse(&.{"--version"})).version);
     try std.testing.expect((try parse(&.{"--help"})).help);
     try std.testing.expect((try parse(&.{"-h"})).help);
+}
+
+test "--version takes no value, so a path after it reports UnknownFlag" {
+    try std.testing.expectError(error.UnknownFlag, parse(&.{ "--version", "/tmp/p" }));
+    try std.testing.expectError(error.UnknownFlag, parse(&.{"--version=1"}));
 }
 
 test "an unrecognized argument reports UnknownFlag" {

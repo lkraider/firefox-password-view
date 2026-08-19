@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const zon = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) void {
     var target = b.standardTargetOptions(.{});
@@ -25,6 +26,12 @@ pub fn build(b: *std.Build) void {
     }
 
     const optimize = b.standardOptimizeOption(.{});
+
+    // `ffpw --version` prints this. scripts/set-version.sh writes
+    // build.zig.zon's .version, and release.yml runs that script's --check
+    // against the pushed tag, so the binary and the tag carry one string.
+    const build_options = b.addOptions();
+    build_options.addOption([]const u8, "version", zon.version);
 
     // Zig's macOS linker embeds an LC_UUID, and a code-signature hash that
     // covers it, derived from debug info that isn't otherwise deterministic.
@@ -128,6 +135,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "core", .module = core_mod },
             .{ .name = "vaxis", .module = vaxis_dep.module("vaxis") },
+            .{ .name = "build_options", .module = build_options.createModule() },
         },
     });
 

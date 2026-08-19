@@ -25,6 +25,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   file, so `ffpw | wl-copy` and `ffpw > /tmp/p` work. The write happens once,
   after the UI exits, with no trailing newline, and the last `y` of the run
   is what a reader receives. On a terminal it writes nothing.
+- `ffpw --version` prints the version and exits 0. The string comes from
+  `build.zig.zon`, the file `scripts/set-version.sh` writes and
+  `release.yml` checks against the pushed tag.
 - `scripts/linux-launch-check.sh` drives the paths that run without a
   terminal and exits non-zero on a failure. `ci.yml` runs it on
   `ubuntu-latest` and `ubuntu-24.04-arm`. Those two jobs are also the first
