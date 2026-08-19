@@ -19,7 +19,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `$WAYLAND_DISPLAY` and `$DISPLAY`. The status line reads `copied` on every
   press, so a host with none of those installed and a terminal that drops
   OSC 52 reports a copy and leaves the clipboard empty. `README.md` and
-  `ffpw --help` name the packages.
+  `ffpw --help` name the package each helper ships in: `wl-clipboard`,
+  `xclip` and `xsel`.
 - `y` writes the password to stdout on any run where stdout is a pipe or a
   file, so `ffpw | wl-copy` and `ffpw > /tmp/p` work. The write happens once,
   after the UI exits, with no trailing newline, and the last `y` of the run

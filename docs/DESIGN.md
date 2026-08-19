@@ -301,9 +301,9 @@ could then name a profile the running Firefox cannot open.
 
 `--profile <path>` names a profile directory and matches Firefox's own
 `-profile <path>`. `main` resolves the root inside the `--list-profiles`
-branch and inside the default-profile branch, so a run passing `--profile`
-walks nothing and opens the directory on a machine carrying no Firefox
-install.
+branch and inside the default-profile branch. A run passing `--profile`
+reads no `profiles.ini`, so it opens the directory on a machine carrying no
+Firefox install.
 
 With no root found, `ffpw` prints every path it tried and exits 1.
 `--list-profiles` prints the resolved root to stderr and the profiles to
@@ -327,10 +327,9 @@ clipboard.
 `wl-copy --paste-once` serves one paste request and then drops the
 clipboard, so a paste into an XWayland window returns nothing.
 
-The status line reads `copied` on every press. A Linux host with no helper
-installed, on a terminal that drops OSC 52, reports `copied` and leaves the
-clipboard empty. `README.md` and `ffpw --help` name `wl-clipboard` and
-`xclip` as the packages a copy needs.
+The status line reads `copied` on every press. `wl-copy` ships in the
+`wl-clipboard` package, `xclip` in `xclip` and `xsel` in `xsel`.
+`README.md` and `ffpw --help` name them.
 
 Linux gets no conceal marker. macOS writes
 `org.nspasteboard.ConcealedType` and Windows registers four formats.

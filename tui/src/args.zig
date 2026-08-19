@@ -27,10 +27,10 @@ pub const usage =
     \\  up down k j  move through the list
     \\  enter        reveal the selected password, again to hide it
     \\  y            copy the selected password. The row stays masked. A copy
-    \\               on Linux runs wl-copy, xclip or xsel, from the
-    \\               wl-clipboard or xclip package. With stdout on a pipe or
-    \\               a file, y writes the password there as well. The last y
-    \\               of the run writes.
+    \\               on Linux runs wl-copy from the wl-clipboard package,
+    \\               xclip from xclip, or xsel from xsel. With stdout on a
+    \\               pipe or a file, y writes the password there as well. The
+    \\               last y of the run writes.
     \\  q ctrl-c     quit
     \\
 ;

@@ -41,13 +41,16 @@ tar -xzf ffpw-x86_64-linux.tar.gz
 install -m 755 ffpw ~/.local/bin/ffpw
 ```
 
-The binary is static, so it runs on any distro. A copy needs `wl-clipboard`
-on Wayland or `xclip` on X11. Install one:
+The binary is static, so it runs on any distro. A copy on Wayland needs
+`wl-copy` from the `wl-clipboard` package. A copy on X11 needs `xclip` from
+`xclip` or `xsel` from `xsel`.
 
 ```
-sudo apt install wl-clipboard     # or: xclip
-sudo dnf install wl-clipboard
+sudo apt install wl-clipboard    # Wayland
+sudo apt install xclip           # X11
 ```
+
+`dnf install` and `pacman -S` take the same package names.
 
 On Windows, download `FirefoxPasswordView-<version>-windows-arm64.zip` or
 `-windows-x86_64.zip` from the releases page and unzip it. The exe is a
@@ -81,10 +84,9 @@ One run reads one of them.
 | `q`, `ctrl-c` | Quit. |
 
 On Linux, `y` runs `wl-copy`, `xclip` or `xsel`. It reports `copied` on
-every press, including a press on a host with none of them installed, so
-install `wl-clipboard` or `xclip` before you rely on it. Over SSH the copy
-goes through OSC 52. It reaches the clipboard of the terminal you are
-sitting at.
+every press, including a press on a host with none of them installed. Over
+SSH the copy goes through OSC 52. It reaches the clipboard of the terminal
+you are sitting at.
 
 `y` also writes the password to stdout on any run where stdout is a pipe or
 a file. On a terminal it writes nothing.
