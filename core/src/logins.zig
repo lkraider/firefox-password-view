@@ -13,7 +13,7 @@ pub const Entry = struct {
     hostname: []const u8,
     /// Decrypted at load, since the list shows it. Empty when `legacy_3des`
     /// is true. Decrypting it there needs a 3DES implementation, and this
-    /// project carries none (see docs/DESIGN.md, "Decisions").
+    /// project carries none (see docs/ARCHITECTURE.md, "Decisions").
     username: []const u8,
     kind: Kind,
     /// True when this entry's fields are still des_ede3_cbc. Firefox 144

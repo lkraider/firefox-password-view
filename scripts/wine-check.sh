@@ -398,7 +398,7 @@ check_long_profile_name() {
     write_profiles_ini "default-release"
 }
 
-# One attempt. docs/DESIGN.md records that Option+P under wine typed a literal
+# One attempt. docs/PLATFORM.md records that Option+P under wine typed a literal
 # p, so the modifier never reached wine. A second failure reports SKIP with
 # that reason. Fix F removed the code path that could have broken the
 # mnemonics, so a SKIP costs nothing.

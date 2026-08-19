@@ -5,7 +5,7 @@
 # release.yml runs this to build what a release publishes. ci.yml's
 # reproducible-build job runs it twice and diffs the output. Every setting
 # below that exists to keep the bytes stable is explained in
-# docs/DESIGN.md "Reproducible builds".
+# docs/REPRODUCIBLE.md.
 #
 # The cross builds start first and run beside the macOS chain. Each gets its
 # own cache directory and install prefix, so it reads no artifact of the
@@ -43,7 +43,7 @@ done
 # ustar cannot carry an extended attribute. bsdtar's default format can, and
 # adds a ._name AppleDouble member for it, so the archive would depend on
 # whether this macOS release attaches com.apple.provenance to a fresh binary.
-# docs/DESIGN.md "Reproducible builds" has the sums.
+# docs/REPRODUCIBLE.md has the sums.
 touch -d "$mtime" "$repo_root/zig-out/bin/ffpw"
 tar --format ustar --numeric-owner --uid 0 --gid 0 -cf - -C "$repo_root/zig-out/bin" ffpw \
     | gzip -n -9 > "$out/ffpw-aarch64-macos.tar.gz"

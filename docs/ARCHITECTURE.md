@@ -159,8 +159,8 @@ per run.
 
 A `Store.open` that lands while Firefox writes `key4.db` returns
 `OpenFailed` or `Corrupt`, so a torn read reaches the front end as a message.
-Reaching that state needs a write to a live profile, and the known
-limitations list records it as untested.
+Reaching that state needs a write to a live profile, and `docs/FORMAT.md`
+records that case as untested.
 
 The decryption modules call no OS-specific API. The platform assumptions
 live in the front ends. `core.zig` and `tui/src/main.zig` find the root

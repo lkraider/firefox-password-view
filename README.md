@@ -206,6 +206,11 @@ without a terminal.
 The released zips are built at `ReleaseSafe`. That mode keeps the bounds and
 alignment checks over the hand-written `key4.db` reader.
 
+`scripts/release-package.sh <version> <dir>` builds and archives every
+published artifact. Five of the six reproduce byte for byte on any macOS
+host. [`docs/REPRODUCIBLE.md`](docs/REPRODUCIBLE.md) names the settings that
+make that hold and the one artifact it excludes.
+
 `win/icon.ico` is committed, and a build reads that file. `python3
 scripts/win-make-ico.py` rewrites it from `macos/Icon.icns`.
 
@@ -225,9 +230,16 @@ win/        the Win32 app
 scripts/    the release, CI and fixture tooling
 ```
 
-[`docs/DESIGN.md`](docs/DESIGN.md) has the on-disk format, the reasoning
-behind each decision in the core, and what a front end on another platform
-has to link.
+Four documents cover the rest:
+
+- [`docs/FORMAT.md`](docs/FORMAT.md) — what Firefox writes into a profile,
+  and the two encryption layers over it.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the decision table, the
+  module map, and the C ABI a front end links.
+- [`docs/PLATFORM.md`](docs/PLATFORM.md) — what the pinned Zig, Win32, wine
+  and macOS do here.
+- [`docs/REPRODUCIBLE.md`](docs/REPRODUCIBLE.md) — the settings that make two
+  packagings of one commit write the same bytes.
 
 ## License
 

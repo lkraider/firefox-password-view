@@ -51,7 +51,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   on one Mac and to `b98f0c28` on another. `scripts/release-package.sh` passes
   `--format ustar`, stamps every member with the instant
   `2026-01-01T00:00:00Z`, and pins `TZ` for the `zip` and `ditto` calls.
-  `docs/DESIGN.md` has the mechanism for each.
+  `docs/REPRODUCIBLE.md` has the mechanism for each.
 - `profiles.resolvePath` tested `rel[0]` against `'/'`, so a Windows
   `profiles.ini` carrying `IsRelative=0` and `Path=C:\Users\x\profile`
   produced `%APPDATA%\Mozilla\Firefox\C:\Users\x\profile`. It calls
@@ -213,8 +213,8 @@ First release. Binaries for Apple Silicon macOS.
   `profiles.ini`, and a synced profile's tombstones and non-web schemes.
 - A fuzz corpus for the DER reader, mutating captured SDR blobs through
   `sdr.parse` and `pbes2.parse`.
-- `docs/DESIGN.md`: the on-disk format and the reasoning behind each
-  implementation decision.
+- `docs/`: the on-disk format and the reasoning behind each implementation
+  decision.
 - `macos/scripts/bundle.sh`: wraps the Swift package's executable in a
   minimal ad-hoc-signed `.app` bundle.
 - `scripts/package-release.sh`: builds both release artifacts. CI packages
