@@ -2,17 +2,28 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
-    // b.standardTargetOptions resolves the target here, then the line
-    // below pins its cpu to a baseline. standardTargetOptions runs the
-    // native-SDK auto-detection for an empty query, and libc needs that
-    // detection to link on macOS. An explicit default_target passed to it
-    // skips the detection, and core_lib_mod below then fails to link.
-    //
-    // The baseline pin makes the binary reproducible across machines. A
-    // "native" cpu resolves to the host's Apple Silicon generation, this
-    // machine's M1 to apple_m1, and Zig picks its codegen from that.
     var target = b.standardTargetOptions(.{});
-    target.result.cpu = std.Target.Cpu.baseline(target.result.cpu.arch, target.result.os);
+
+    // The compiler locates the macOS SDK for a native query. With a triple
+    // in the query, translate-c reports
+    // `unable to find dynamic system library 'sqlite3'`. core/test/oracle.zig
+    // links libsqlite3 and runs on the build host.
+    const host_target = target;
+
+    // std.Build sends the compiler `target.query`
+    // (lib/std/Build/Module.zig:596). An empty query sends no -target and no
+    // -mcpu. The compiler then reads the cpu and the macOS version from the
+    // build host. A runner image bump moves the published bytes.
+    //
+    // 14.0 is the floor Package.swift and Formula/ffpw.rb declare. Linux and
+    // Windows keep the empty query. A native build there takes its kernel and
+    // glibc versions from the host.
+    if (target.result.os.tag == .macos) {
+        target.query.cpu_arch = target.result.cpu.arch;
+        target.query.os_tag = .macos;
+        target.query.os_version_min = .{ .semver = .{ .major = 14, .minor = 0, .patch = 0 } };
+    }
+
     const optimize = b.standardOptimizeOption(.{});
 
     // Zig's macOS linker embeds an LC_UUID, and a code-signature hash that
@@ -64,7 +75,7 @@ pub fn build(b: *std.Build) void {
     if (b.option(bool, "oracle", "Diff the SQLite reader against the system sqlite3") orelse host_has_sqlite) {
         const sqlite_c = b.addTranslateC(.{
             .root_source_file = b.path("core/test/sqlite.h"),
-            .target = target,
+            .target = host_target,
             .optimize = optimize,
         });
         sqlite_c.linkSystemLibrary("sqlite3", .{});
@@ -73,14 +84,14 @@ pub fn build(b: *std.Build) void {
         // core/src by path, so the reader arrives as a named import.
         const oracle_mod = b.createModule(.{
             .root_source_file = b.path("core/test/oracle.zig"),
-            .target = target,
+            .target = host_target,
             .optimize = optimize,
             .link_libc = true,
             .imports = &.{
                 .{ .name = "sqlite", .module = sqlite_c.createModule() },
                 .{ .name = "sqlitedb", .module = b.createModule(.{
                     .root_source_file = b.path("core/src/sqlitedb.zig"),
-                    .target = target,
+                    .target = host_target,
                     .optimize = optimize,
                 }) },
             },

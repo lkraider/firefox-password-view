@@ -39,6 +39,20 @@ jobs:
       - name: Package the release artifacts
         run: ./scripts/package-release.sh "${GITHUB_REF_NAME#v}" dist
 
+      # LC_UUID and the code signature still follow the installed macOS SDK.
+      # This file records what the runner had, so a hash that moves between
+      # two releases can be traced to the toolchain that produced it.
+      - name: Record the build environment
+        working-directory: dist
+        run: |
+          zig="../zig/zig-aarch64-macos-${ZIG_VERSION}/zig"
+          {
+            echo "zig       $("$zig" version)"
+            echo "macos     $(sw_vers -productVersion)"
+            echo "sdk       $(xcrun --show-sdk-version)"
+            echo "swift     $(swift --version | head -1)"
+          } | tee BUILDINFO.txt
+
       - name: Checksums
         working-directory: dist
         run: shasum -a 256 * | tee SHA256SUMS
