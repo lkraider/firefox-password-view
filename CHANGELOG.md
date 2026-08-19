@@ -25,9 +25,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   file, so `ffpw | wl-copy` and `ffpw > /tmp/p` work. The write happens once,
   after the UI exits, with no trailing newline, and the last `y` of the run
   is what a reader receives. On a terminal it writes nothing.
-- `ffpw --version` prints the version and exits 0. The string comes from
-  `build.zig.zon`, the file `scripts/release-set-version.sh` writes and
-  `release.yml` checks against the pushed tag.
+- `ffpw --version` prints the version and exits 0.
 - `scripts/linux-launch-check.sh` drives the paths that run without a
   terminal and exits non-zero on a failure. `ci.yml` runs it on
   `ubuntu-latest` and `ubuntu-24.04-arm`. Those two jobs are also the first
@@ -46,6 +44,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The release archives reproduce on any macOS host. `bsdtar`'s default format
+  adds an AppleDouble member when a file carries an extended attribute, and
+  macOS 15.6 attaches `com.apple.provenance` to a freshly linked binary while
+  15.7.7 does not. One `ffpw` at `8b49bb31` therefore archived to `88ab0442`
+  on one Mac and to `b98f0c28` on another. `scripts/release-package.sh` passes
+  `--format ustar`, stamps every member with the instant
+  `2026-01-01T00:00:00Z`, and pins `TZ` for the `zip` and `ditto` calls.
+  `docs/DESIGN.md` has the mechanism for each.
 - `profiles.resolvePath` tested `rel[0]` against `'/'`, so a Windows
   `profiles.ini` carrying `IsRelative=0` and `Path=C:\Users\x\profile`
   produced `%APPDATA%\Mozilla\Firefox\C:\Users\x\profile`. It calls

@@ -404,38 +404,17 @@ and that link needs the same SDK, so cross-compiling `libffpw.a` to macOS
 from another host stays out of reach.
 
 `build.zig.zon`'s `.version` is the one place the version string lives.
-`build.zig` imports the manifest and hands that string to `tui_mod` as
+`build.zig` imports the manifest and hands the string to `tui_mod` as
 `build_options.version`. `ffpw --version` prints it.
 `scripts/release-set-version.sh` writes the same string into
 `macos/Info.plist`, `win/app.rc`, `CHANGELOG.md`, `Formula/ffpw.rb` and the
-cask. `release.yml`
-runs `release-set-version.sh --check` against the pushed tag, so a file left
-at the old version stops the release before it uploads anything.
-
-Two build hosts produce the same bytes for each cross-compiled target, and
-`ci.yml` asserts it. Each build job writes its binary's SHA-256 to the run
-summary and publishes it as a job output. `reproducible-build` records every
-cross target on `macos-15`, from the binaries `scripts/release-package.sh`
-put in the archives. `windows-test` builds `x86_64` twice in parallel on
-`windows-latest`. `windows-arm-test` cross-compiles `arm64` on
-`windows-11-arm` through the emulated x86_64 toolchain. `linux-test` builds
-`x86_64-linux-musl` on `ubuntu-latest` and `linux-arm-test` builds
-`aarch64-linux-musl` on `ubuntu-24.04-arm`. The `compare-sums` job waits for
-all of them and runs `scripts/ci-compare-sums.sh` once per target. An empty sum
-fails that job, since two missing values compare equal.
-
-`windows-test` also fails when its own two builds disagree. A query carrying
-a triple serializes `-mcpu baseline`, so the target string decides the code
-generation on every host.
+cask. `release.yml` runs that script's `--check` against the pushed tag, so a
+file left at the old version stops the release before it uploads anything.
 
 `linux-test` and `linux-arm-test` run `zig build test` natively. No other
 job runs the suite on Linux. `build.zig` reads `host_has_sqlite` from
 `builtin.os.tag == .macos`, so the oracle skips itself and those runners
-install no libsqlite3 headers. Each job then asserts the ReleaseSafe `ffpw`
-carries no `PT_INTERP` segment. `file` calls a static PIE "static-pie
-linked", so a grep for "statically linked" fails on a correct binary.
-`zig build-exe --help` reports `--build-id ... none (default)`, so no build
-ID enters the ELF and the two hosts agree on the bytes.
+install no libsqlite3 headers.
 
 Nothing else links a C library. `zig build -Dtarget=x86_64-windows-gnu`,
 `-Dtarget=aarch64-windows-gnu`, `-Dtarget=x86_64-linux-musl` and
@@ -506,6 +485,87 @@ another app's data directory. TCC leaves `~/Library/Application Support`
 open to any process outside the sandbox, so the app reads a profile with
 no permission prompt.
 
+## Reproducible builds
+
+Two layers reproduce separately. A binary reproduces on any host that can
+target it. The archive around it reproduces on any macOS host, and
+`release-package.sh` runs `swift build` for the `.app`, so macOS is the only
+host that packages a release.
+
+### The binaries
+
+`build.zig` sets `strip` for every mode except Debug. Zig's macOS linker
+derives `LC_UUID`, and the code-signature hash covering it, from debug info
+that varies between builds. Stripping removes that input.
+`macos/scripts/bundle.sh` passes `-Xswiftc -gnone` for the same reason.
+
+`build.zig` writes `os_version_min` into `target.query` for a macOS target.
+`std.Build` sends the compiler `target.query` and never the resolved result
+(`lib/std/Build/Module.zig:596`), so an empty query let the compiler read the
+deployment version from the build host, and a runner image bump moved the
+published bytes. `LC_BUILD_VERSION` now reports `minos 14.0` everywhere, the
+floor `Package.swift` and `Formula/ffpw.rb` declare.
+
+`zig build-exe --help` reports `--build-id ... none (default)`, so no build
+ID enters an ELF.
+
+### The archives
+
+Three settings in `release-package.sh` keep the archive bytes independent of
+which Mac runs it.
+
+`tar --format ustar`. bsdtar defaults to "pax restricted". That format adds a
+`._name` AppleDouble member when the file carries an extended attribute. macOS
+15.6 attaches `com.apple.provenance` to a freshly linked binary that has never
+run, and 15.7.7 leaves it off. One `ffpw` at `8b49bb31` therefore archived to
+`88ab0442` on 15.6 and to `b98f0c28` on 15.7.7. Under `ustar` both write
+`b98f0c28`.
+
+`touch -d 2026-01-01T00:00:00Z`. tar stores an absolute epoch, and `touch -t`
+reads its stamp as local time, so a host at -03 wrote 1767236400 where a UTC
+host wrote 1767225600. `macos/scripts/bundle.sh` stamps the `.app` with the
+same instant.
+
+`TZ=UTC` on the `zip` and `ditto` calls. `zip -X` drops the UT extra field and
+leaves the MS-DOS field. That field holds wall-clock time, and both programs
+read `TZ` to convert an mtime into it.
+
+Apple gzip and GNU gzip emit different deflate streams for one ustar tar,
+`b98f0c28` against `a5d1c23b`. A Linux host that rebuilds a published archive
+gets the same binary inside a different `.tar.gz`.
+
+### The macOS app zip
+
+`FirefoxPasswordView-<version>-macos.zip` holds the Swift binary, and its
+`LC_UUID` follows the installed SDK. `vtool(1)` rewrites `LC_BUILD_VERSION`
+and has no option for `LC_UUID`. Closing this needs the macOS SDK vendored
+into every build environment, as `zig-build-macos-sdk` does for Ghostty.
+
+`Formula/ffpw.rb` and `Casks/firefox-password-view.rb` therefore carry a hash
+from `ci.yml`'s `reproducible-build` job. `release.yml` packages on a second
+runner and compares both hashes with the assets it built. A mismatch exits
+before the upload.
+
+This is the only artifact with that limit. Every other one reproduces across
+Macs, measured on 15.6 against the runner's 15.7.7 and across three runs from
+clean at -03, +09 and +12:45.
+
+### What CI asserts
+
+`reproducible-build` packages twice from clean on `macos-15` and diffs every
+artifact. Each build job writes its binary's SHA-256 to the run summary and
+publishes it as a job output. `compare-sums` waits for all of them and runs
+`ci-compare-sums.sh` once per target. An empty sum fails that job, since two
+missing values compare equal.
+
+`windows-test` builds `x86_64` twice in parallel and fails when the two
+disagree. A query carrying a triple serializes `-mcpu baseline`, so the target
+string decides the code generation on every host.
+
+`linux-test` and `linux-arm-test` assert the ReleaseSafe `ffpw` carries no
+`PT_INTERP` segment. `file` calls a static PIE "static-pie linked", so a grep
+for "statically linked" fails on a correct binary.
+
 ## Known limitations
 
 - `oids.zig`'s `Cipher.fromOid` knows two OIDs, AES-256-CBC and legacy
@@ -543,22 +603,9 @@ no permission prompt.
   Windows. `build.zig` installs `ffpw` only for a non-Windows target.
 - The Windows app follows the system dark-mode setting at startup only. It
   reads `AppsUseLightTheme` once and handles no `WM_SETTINGCHANGE`.
-- One machine building the release twice produces byte-identical output.
-  That holds across a clean cache, a different absolute path, `-j1`
-  against `-j4`, and ad-hoc codesigning. Two machines with different
-  macOS SDKs installed produce different bytes from the same source.
-  Zig's macOS linker hashes SDK-derived bytes into the binary's
-  `LC_UUID`. The host's macOS version stays out of the binary:
-  `build.zig` writes `os_version_min` into `target.query`, so
-  `LC_BUILD_VERSION` reports `minos 14.0` on every runner image. An empty
-  query lets the compiler read that field from the build host. `vtool(1)` rewrites `LC_BUILD_VERSION`. It has no option for
-  `LC_UUID`. Closing this needs the macOS SDK vendored into every build
-  environment, as `zig-build-macos-sdk` does for Ghostty. Until then
-  `Formula/ffpw.rb` and `Casks/firefox-password-view.rb` carry CI's hash,
-  printed by `ci.yml`'s `reproducible-build` job on every push. That hash
-  comes from one runner, and `release.yml` packages on another.
-  `release.yml` compares both hashes with the assets it packaged. A
-  mismatch exits the job before the upload.
+- `FirefoxPasswordView-<version>-macos.zip` differs between two Macs with
+  different SDKs installed. "Reproducible builds" has the mechanism and what
+  every other artifact guarantees.
 
 ## Prior art
 

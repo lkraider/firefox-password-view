@@ -39,13 +39,11 @@ cp "Icon.icns" "$app/Contents/Resources/Icon.icns"
 codesign --force --deep --sign - "$app"
 
 # A fixed mtime on every file. The app's contents are already
-# byte-identical across rebuilds by this point. Fixing every file's
-# mtime removes timestamps as the last remaining source of variance
-# between two zips of the same bundle.
+# byte-identical across rebuilds by this point, so the timestamps are the
+# last source of variance between two zips of the same bundle.
 #
-# The trailing Z makes touch read the stamp as UTC. `touch -t` read it as
-# local time, so the instant it wrote moved with the host's zone.
-# scripts/release-package.sh stamps its own archive members with this value.
+# The trailing Z makes touch read the stamp as UTC.
+# scripts/release-package.sh repeats this value for its own archives.
 /usr/bin/find "$app" -exec touch -d 2026-01-01T00:00:00Z {} +
 
 echo "$app"

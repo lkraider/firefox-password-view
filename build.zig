@@ -27,9 +27,9 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
-    // `ffpw --version` prints this. scripts/release-set-version.sh writes
-    // build.zig.zon's .version, and release.yml runs that script's --check
-    // against the pushed tag, so the binary and the tag carry one string.
+    // `ffpw --version` prints this. Reading the manifest keeps the version in
+    // one file. scripts/release-set-version.sh writes it, and release.yml
+    // checks it against the pushed tag.
     const build_options = b.addOptions();
     build_options.addOption([]const u8, "version", zon.version);
 

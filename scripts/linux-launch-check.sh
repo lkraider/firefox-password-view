@@ -72,9 +72,9 @@ HOME="$home" "$ffpw" --list-profiles > "$tmp/out" 2> "$tmp/err" \
 grep -qx "$home/.mozilla/firefox" "$tmp/err" || fail "two roots: took $(cat "$tmp/err")"
 finish "the first populated root wins"
 
-# 3. --profile names a profile directory, so the run opens it straight away
-# and skips the walk. ffpw serves a machine where Firefox has never been
-# installed. Reaching the UI needs a pty, so this reads the error text alone.
+# 3. --profile must not trigger the walk. main resolved the root before it read
+# --profile once. That made a populated root a precondition for every run.
+# Reaching the UI needs a pty, so this reads stderr instead.
 begin
 bare="$tmp/no-firefox"
 mkdir -p "$bare"

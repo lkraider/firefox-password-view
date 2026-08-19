@@ -605,9 +605,8 @@ fn listProfiles(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) !vo
 /// The first root under $HOME holding a profiles.ini. Null means this
 /// function already wrote the reason to stderr. `main` then returns 1.
 ///
-/// The branches that read profiles.ini call this. `--profile <path>` names a
-/// directory outright, so that run opens it on a machine where Firefox has
-/// never been installed.
+/// Call this only where a profiles.ini has to be read. Calling it before
+/// `--profile` is read makes a populated root a precondition for every run.
 fn resolveFirefoxDir(io: std.Io, gpa: std.mem.Allocator, home: ?[]const u8) !?[]u8 {
     const dir = home orelse {
         try write(io, .stderr(), "HOME is not set\n");
@@ -715,7 +714,7 @@ pub fn main(init: std.process.Init) !u8 {
     try app.run(model.widget(), .{});
 
     // std.Io.Threaded installs a SIGPIPE handler (Threaded.zig:1661), so a
-    // reader that exited first surfaces here as error.BrokenPipe. A `try`
+    // reader that exited first gives error.BrokenPipe here. A `try`
     // would make `ffpw | head -c 5` exit non-zero with a trace.
     if (model.stdout_len > 0) {
         write(io, .stdout(), model.stdout_out[0..model.stdout_len]) catch {};

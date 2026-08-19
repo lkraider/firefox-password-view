@@ -1,17 +1,16 @@
 #!/bin/sh
 # Builds and packages the release artifacts: the TUI binary, the macOS app,
-# and the Windows app for both architectures. Every one is a reproducible
-# build. See build.zig's `strip` and macos/scripts/bundle.sh's -gnone for why,
-# and their commit messages for what was verified.
-# .github/workflows/release.yml runs this to build the published artifacts.
-# .github/workflows/ci.yml's reproducible-build job runs this twice and diffs
-# the output. Both jobs exercise the same packaging.
+# and the Windows app for both architectures.
 #
-# The cross builds start first and run beside the macOS chain. Each one
-# gets its own cache directory and its own install prefix, so it reads no
-# artifact of the others and leaves zig-out to the macOS build. Measured on a
-# development Mac: an exe from a build with these flags has the same SHA-256 as
-# an exe from a build without them.
+# release.yml runs this to build what a release publishes. ci.yml's
+# reproducible-build job runs it twice and diffs the output. Every setting
+# below that exists to keep the bytes stable is explained in
+# docs/DESIGN.md "Reproducible builds".
+#
+# The cross builds start first and run beside the macOS chain. Each gets its
+# own cache directory and install prefix, so it reads no artifact of the
+# others and leaves zig-out to the macOS build. Those two flags change no byte
+# of the exe.
 set -eu
 
 version="${1:?usage: release-package.sh <version> <output-dir>}"
@@ -22,9 +21,8 @@ mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 
 # Every archive below stamps its members with this instant. The trailing Z
-# makes touch read it as UTC. `touch -t` reads local time, so the mtime it
-# wrote moved with the host's zone, and tar stores an absolute epoch.
-# macos/scripts/bundle.sh stamps the .app with the same value.
+# makes touch read it as UTC, and tar stores an absolute epoch.
+# macos/scripts/bundle.sh repeats this value for the .app.
 mtime=2026-01-01T00:00:00Z
 
 # ReleaseSafe keeps the bounds, alignment and overflow checks. sqlitedb.zig
@@ -42,18 +40,16 @@ done
 
 (cd "$repo_root" && "$zig" build -Doptimize=ReleaseSafe)
 
-# bsdtar defaults to "pax restricted", which escalates to a ._name AppleDouble
-# member when the file carries an extended attribute. macOS 15.6 attaches
-# com.apple.provenance to a freshly linked binary and 15.7.7 does not, so two
-# Macs wrote different archives for one binary: 88ab0442 against the runner's
-# b98f0c28 for ffpw 8b49bb31. `--format ustar` cannot carry the attribute, so
-# the header is the same either way.
+# ustar cannot carry an extended attribute. bsdtar's default format can, and
+# adds a ._name AppleDouble member for it, so the archive would depend on
+# whether this macOS release attaches com.apple.provenance to a fresh binary.
+# docs/DESIGN.md "Reproducible builds" has the sums.
 touch -d "$mtime" "$repo_root/zig-out/bin/ffpw"
 tar --format ustar --numeric-owner --uid 0 --gid 0 -cf - -C "$repo_root/zig-out/bin" ffpw \
     | gzip -n -9 > "$out/ffpw-aarch64-macos.tar.gz"
 
-# ditto and zip both write the MS-DOS timestamp field, which holds wall-clock
-# time. Each reads TZ to convert the mtime, so both need the zone pinned.
+# ditto and zip store the MS-DOS timestamp field. That field holds wall-clock
+# time, and each program reads TZ to convert an mtime into it.
 (cd "$repo_root/macos" && ./scripts/bundle.sh release)
 TZ=UTC ditto -c -k --keepParent \
     "$repo_root/macos/.build/release/FirefoxPasswordView.app" \
@@ -67,9 +63,8 @@ for job in $cross_jobs; do
 done
 [ "$status" -eq 0 ] || exit 1
 
-# -X drops the extra attributes zip stores per entry, including the UT field
-# that holds a UTC epoch. What remains is the MS-DOS field, so TZ decides the
-# bytes.
+# -X drops the UT extra field. That field carries the mtime as a UTC epoch, so
+# it moves whenever the stamp does.
 for arch in x86_64 arm64; do
     exe="$repo_root/out-win-$arch/bin/FirefoxPasswordView.exe"
     touch -d "$mtime" "$exe"
