@@ -222,7 +222,7 @@ core/       key4.db and logins.json decryption, and the C ABI
 tui/        the terminal UI, on libvaxis
 macos/      the SwiftUI app
 win/        the Win32 app
-scripts/    release, CI, fixture and screenshot tooling
+scripts/    the release, CI and fixture tooling
 ```
 
 [`docs/DESIGN.md`](docs/DESIGN.md) has the on-disk format, the reasoning

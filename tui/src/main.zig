@@ -602,12 +602,12 @@ fn listProfiles(io: std.Io, gpa: std.mem.Allocator, firefox_dir: []const u8) !vo
     try writer.interface.flush();
 }
 
-/// The first root under $HOME holding a profiles.ini. Null means the reason
-/// is already on stderr and `main` returns 1.
+/// The first root under $HOME holding a profiles.ini. Null means this
+/// function already wrote the reason to stderr. `main` then returns 1.
 ///
-/// Only the two branches that read profiles.ini call this. `--profile <path>`
-/// names a directory outright, so that run opens it on a machine carrying no
-/// Firefox install.
+/// The branches that read profiles.ini call this. `--profile <path>` names a
+/// directory outright, so that run opens it on a machine where Firefox has
+/// never been installed.
 fn resolveFirefoxDir(io: std.Io, gpa: std.mem.Allocator, home: ?[]const u8) !?[]u8 {
     const dir = home orelse {
         try write(io, .stderr(), "HOME is not set\n");

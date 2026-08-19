@@ -194,10 +194,13 @@ scripts/               every file carries the prefix of the group it serves
   wine-shutdown.sh        ends a wine prefix's session and kills its helpers
 ```
 
-Every script here needs a Mac to run, so a `mac-` prefix would mark all of
-them and separate none. `docs-window-list.swift` takes the prefix of its
-larger consumer: `docs-screenshots.sh` compiles it for all three of its
-captures, and `wine-check.sh` compiles it too.
+Every script here needs a Mac to run. A `mac-` prefix would mark every file
+in the listing above.
+
+Two scripts compile `docs-window-list.swift`. `docs-screenshots.sh` compiles
+it for the Terminal capture, the macOS app capture and the wine capture.
+`wine-check.sh` compiles it for its window lookups. The prefix names the
+first caller.
 
 Inside `win/src/`, `model.zig` holds every rule about what a row shows and
 what an activation means. It imports `core` and `std` alone, so `zig build
@@ -311,8 +314,8 @@ could then name a profile the running Firefox cannot open.
 `--profile <path>` names a profile directory and matches Firefox's own
 `-profile <path>`. `main` resolves the root inside the `--list-profiles`
 branch and inside the default-profile branch. A run passing `--profile`
-reads no `profiles.ini`, so it opens the directory on a machine carrying no
-Firefox install.
+opens that directory straight away, so it works on a machine where Firefox
+has never been installed.
 
 With no root found, `ffpw` prints every path it tried and exits 1.
 `--list-profiles` prints the resolved root to stderr and the profiles to

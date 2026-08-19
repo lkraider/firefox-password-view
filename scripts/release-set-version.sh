@@ -32,7 +32,7 @@ fi
 
 cd "$(cd "$(dirname "$0")/.." && pwd)"
 
-# PlistBuddy rewrites the whole file: it converts the 4-space indent to tabs
+# PlistBuddy rewrites the whole file. It converts the 4-space indent to tabs
 # and sorts the keys. That turned a two-line bump into a 36-line diff. These
 # read the line after the key, the way the plist is laid out.
 plist_value() {
