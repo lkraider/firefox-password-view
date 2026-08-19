@@ -1,8 +1,8 @@
 # Architecture
 
-How this repository is put together: the decisions already made, the module
-map, the C ABI a front end links, and what each front end does with it.
-Nothing here depends on a toolchain version.
+How this repository is put together. It holds the decisions already made,
+the module map, the C ABI a front end links, and what each front end does
+with it. Nothing here depends on a toolchain version.
 
 `docs/FORMAT.md` covers Firefox's on-disk format. `docs/PLATFORM.md` covers
 what the pinned Zig and the current operating systems do.
@@ -10,6 +10,9 @@ what the pinned Zig and the current operating systems do.
 and the threat model.
 
 ## Decisions
+
+This table only grows. A reversed decision gets a new row marked superseded,
+so the row that recorded the original choice stays readable.
 
 | Decision | Choice | Rejected alternative |
 |---|---|---|
@@ -25,6 +28,7 @@ and the threat model.
 | Reveal | Masked by default, reveal one entry, copy to clipboard | Printing every password fills terminal scrollback |
 | Architecture | Ship one `aarch64-macos` slice, plus `x86_64-windows` and `aarch64-windows` | A macOS universal binary adds a lipo step and a second build for an architecture no release targets |
 | Fixtures | Written by an installed Firefox over Marionette, committed under `core/testdata/` | A generator built from this project's own reading of the format would only show the reader agrees with itself |
+| Archive determinism | `--format ustar`, an absolute `touch -d` instant, `TZ=UTC` on `zip` and `ditto` | `SOURCE_DATE_EPOCH` with `--mtime` and `--clamp-mtime`, the reproducible-builds.org recipe. bsdtar 3.5.3 accepts neither flag |
 
 ## Module layout
 

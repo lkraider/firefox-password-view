@@ -1,7 +1,7 @@
 # Reproducible builds
 
-Two packagings of one commit write the same bytes. This file records every
-setting that makes that true, and the one artifact where it stops.
+Two packagings of one commit write the same bytes, except for the macOS app
+zip. Every setting recorded here exists to keep that true.
 
     Measured against
     Zig 0.16.0 · macOS 15.6, and the macos-15 runner at 15.7.7

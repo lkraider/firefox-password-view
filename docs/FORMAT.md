@@ -1,8 +1,8 @@
 # Firefox's on-disk format
 
-What Firefox writes into a profile directory, and how the two encryption
-layers fit together. Mozilla owns every fact here, and a Firefox release can
-change any of them. Read this before changing the decryption path.
+What Firefox writes into a profile directory, and how its encryption layers
+fit together. Mozilla owns every fact here, and a Firefox release can change
+any of them. Read this before changing the decryption path.
 
 The measurements come from a live Firefox 152.0.6 profile on macOS 15.7.7
 arm64.

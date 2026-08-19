@@ -207,9 +207,11 @@ The released zips are built at `ReleaseSafe`. That mode keeps the bounds and
 alignment checks over the hand-written `key4.db` reader.
 
 `scripts/release-package.sh <version> <dir>` builds and archives every
-published artifact. Five of the six reproduce byte for byte on any macOS
-host. [`docs/REPRODUCIBLE.md`](docs/REPRODUCIBLE.md) names the settings that
-make that hold and the one artifact it excludes.
+published artifact. The Linux tarballs, the macOS `ffpw` tarball and the
+Windows zips reproduce byte for byte on any macOS host. The macOS app zip
+does not. Its hash follows the SDK installed on the build machine.
+[`docs/REPRODUCIBLE.md`](docs/REPRODUCIBLE.md) has the settings and the
+measurements.
 
 `win/icon.ico` is committed, and a build reads that file. `python3
 scripts/win-make-ico.py` rewrites it from `macos/Icon.icns`.
@@ -230,10 +232,10 @@ win/        the Win32 app
 scripts/    the release, CI and fixture tooling
 ```
 
-Four documents cover the rest:
+`docs/` covers the rest:
 
 - [`docs/FORMAT.md`](docs/FORMAT.md) — what Firefox writes into a profile,
-  and the two encryption layers over it.
+  and the encryption over it.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the decision table, the
   module map, and the C ABI a front end links.
 - [`docs/PLATFORM.md`](docs/PLATFORM.md) — what the pinned Zig, Win32, wine
