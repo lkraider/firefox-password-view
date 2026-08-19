@@ -107,7 +107,7 @@ cwd through `lsof` and kills the ones inside the prefix it was given.
 
 `build.zig` sets `win_exe.subsystem = .Windows`, so the process has no console
 and Zig's default panic write to stderr reaches nobody. A panic there closes
-the window and reports nothing.
+the window.
 
 `main.zig` declares `pub const panic = std.debug.FullPanic(crash.report)`.
 `std.debug.panicExtra` formats each safety panic into text, so `crash.report`
@@ -195,9 +195,9 @@ could then name a profile the running Firefox cannot open.
 
 `--profile <path>` names a profile directory and matches Firefox's own
 `-profile <path>`. `main` resolves the root inside the `--list-profiles`
-branch and inside the default-profile branch. A run passing `--profile`
-opens that directory straight away, so it works on a machine where Firefox
-has never been installed.
+branch and inside the default-profile branch. Resolving it any earlier makes
+a populated root a precondition for every run, including a run that names
+its own profile directory.
 
 With no root found, `ffpw` prints every path it tried and exits 1.
 `--list-profiles` prints the resolved root to stderr and the profiles to
@@ -225,9 +225,6 @@ The status line reads `copied` on every press. `wl-copy` ships in the
 `wl-clipboard` package, `xclip` in `xclip` and `xsel` in `xsel`.
 `README.md` and `ffpw --help` name them.
 
-Linux gets no conceal marker. macOS writes
-`org.nspasteboard.ConcealedType` and Windows registers four formats.
-
 ### The stdout path
 
 `y` copies the password into a buffer on `Model` when
@@ -249,7 +246,7 @@ is what puts bytes anywhere, so a redirect alone writes nothing.
 `wl-copy` and `xclip` copy the bytes they receive, and a newline inside a
 password field breaks a login form, so the write ends without one. Bytes
 already in a pipe cannot be retracted, so buffering lets the last `y`
-replace the one before it. The write ends with `catch {}`: a reader that
+replace the one before it. The write ends with `catch {}`. A reader that
 exits first gives `error.BrokenPipe`, and a `try` would make
 `ffpw | head -c 5` exit non-zero with a trace.
 
@@ -272,8 +269,8 @@ revealed password on the same timer. Each reads the clipboard's serial
 number right after its own write and compares before it clears, so a copy
 another program made in between stays. The call is
 `GetClipboardSequenceNumber` on Windows and `NSPasteboard.changeCount` on
-macOS. The TUI writes through
-OSC 52 and a helper program, and arms no timer on any platform.
+macOS. The TUI writes through OSC 52 and a helper program, and arms no timer
+on any platform.
 
 ## Limits
 
