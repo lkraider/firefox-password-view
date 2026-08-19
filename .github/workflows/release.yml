@@ -42,6 +42,15 @@ jobs:
       # LC_UUID and the code signature still follow the installed macOS SDK.
       # This file records what the runner had, so a hash that moves between
       # two releases can be traced to the toolchain that produced it.
+      #
+      # tar, gzip and zip decide the published archive bytes as much as the
+      # compiler does. bsdtar's default format writes an AppleDouble member
+      # for an extended attribute, and Apple gzip emits a different deflate
+      # stream than GNU gzip for one input. ditto accepts no version flag, so
+      # the macOS version above is its only record.
+      #
+      # date reads the runner's zone. TZ=UTC sits on the individual zip and
+      # ditto calls inside release-package.sh, so echo "$TZ" prints nothing.
       - name: Record the build environment
         working-directory: dist
         run: |
@@ -51,6 +60,10 @@ jobs:
             echo "macos     $(sw_vers -productVersion)"
             echo "sdk       $(xcrun --show-sdk-version)"
             echo "swift     $(swift --version | head -1)"
+            echo "tar       $(tar --version | head -1)"
+            echo "gzip      $(gzip --version 2>&1 | head -1)"
+            echo "zip       $(zip -v | grep -m1 'This is Zip')"
+            echo "host tz   $(date +%Z%z)"
           } | tee BUILDINFO.txt
 
       - name: Checksums
