@@ -624,7 +624,7 @@ fn resolveFirefoxDir(io: std.Io, gpa: std.mem.Allocator, home: ?[]const u8) !?[]
 fn reportNoFirefoxDir(io: std.Io, gpa: std.mem.Allocator, home: []const u8) !void {
     var buf: [1024]u8 = undefined;
     var writer = std.Io.File.stderr().writer(io, &buf);
-    try writer.interface.writeAll("ffpw: found no profiles.ini under\n");
+    try writer.interface.writeAll("keywise: found no profiles.ini under\n");
     for (profiles.home_relative_dirs) |rel| {
         const dir = try std.fs.path.join(gpa, &.{ home, rel });
         defer gpa.free(dir);
@@ -659,8 +659,8 @@ pub fn main(init: std.process.Init) !u8 {
     defer gpa.free(argv);
     const options = cli.parse(argv) catch |err| {
         const message = switch (err) {
-            error.MissingValue => "ffpw: --profile needs a path\n",
-            error.UnknownFlag => "ffpw: unrecognized argument, see ffpw --help\n",
+            error.MissingValue => "keywise: --profile needs a path\n",
+            error.UnknownFlag => "keywise: unrecognized argument, see keywise --help\n",
         };
         try write(io, .stderr(), message);
         return 2;
@@ -670,7 +670,7 @@ pub fn main(init: std.process.Init) !u8 {
         return 0;
     }
     if (options.version) {
-        try write(io, .stdout(), "ffpw " ++ build_options.version ++ "\n");
+        try write(io, .stdout(), "keywise " ++ build_options.version ++ "\n");
         return 0;
     }
 
@@ -715,7 +715,7 @@ pub fn main(init: std.process.Init) !u8 {
 
     // std.Io.Threaded installs a SIGPIPE handler (Threaded.zig:1661), so a
     // reader that exited first gives error.BrokenPipe here. A `try`
-    // would make `ffpw | head -c 5` exit non-zero with a trace.
+    // would make `keywise | head -c 5` exit non-zero with a trace.
     if (model.stdout_len > 0) {
         write(io, .stdout(), model.stdout_out[0..model.stdout_len]) catch {};
     }

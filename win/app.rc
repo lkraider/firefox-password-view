@@ -57,12 +57,12 @@ FILESUBTYPE 0x0L
         BLOCK "040904b0"
         {
             VALUE "CompanyName", "Paul Eipper"
-            VALUE "FileDescription", "Firefox Password View"
+            VALUE "FileDescription", "Keywise"
             VALUE "FileVersion", "1.3.0"
-            VALUE "InternalName", "FirefoxPasswordView"
+            VALUE "InternalName", "Keywise"
             VALUE "LegalCopyright", "Copyright (c) 2026 Paul Eipper. MIT License."
-            VALUE "OriginalFilename", "FirefoxPasswordView.exe"
-            VALUE "ProductName", "Firefox Password View"
+            VALUE "OriginalFilename", "Keywise.exe"
+            VALUE "ProductName", "Keywise"
             VALUE "ProductVersion", "1.3.0"
         }
     }

@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct FirefoxPasswordViewApp: App {
+struct KeywiseApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
@@ -23,10 +23,10 @@ struct FirefoxPasswordViewApp: App {
     /// One AppModel backs the app, since @State here is created once per
     /// process. Every extra window would therefore show the same profile and
     /// share this one's search text and revealed row. Two of them also run
-    /// `.task { model.start() }` twice against one FFPWStore, where one
+    /// `.task { model.start() }` twice against one KeywiseStore, where one
     /// window's `store.close()` lands while the other is still opening.
     var body: some Scene {
-        Window("Firefox Passwords", id: "main") {
+        Window("Keywise", id: "main") {
             ContentView(model: model)
                 .task { await model.start() }
         }

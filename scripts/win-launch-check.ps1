@@ -4,7 +4,7 @@
 #
 # win/src/main.zig calls reportFatal and returns 1 when openFirst finds no
 # profile, and CreateWindowExW runs after that check. So a process still alive
-# with a FirefoxPasswordViewWindow up has opened the profile and built the list.
+# with a KeywiseWindow up has opened the profile and built the list.
 #
 # A window of class #32770 is a MessageBoxW, so reportFatal ran and the process
 # is parked on a modal dialog. On a session with no interactive desktop,
@@ -15,7 +15,7 @@
 # way, so a missing window fails the run.
 [CmdletBinding()]
 param(
-    [string]$Exe = "zig-out\bin\FirefoxPasswordView.exe",
+    [string]$Exe = "zig-out\bin\Keywise.exe",
     # The fresh fixture opens under an empty Primary Password, so
     # promptPassword raises no dialog.
     [string]$ProfileDir = "core\testdata\fresh"
@@ -90,11 +90,11 @@ try {
     if ($classes -contains "#32770") {
         Write-Host "FAIL  a MessageBoxW is up, so reportFatal ran. Classes: $($classes -join ', ')"
         $code = 1
-    } elseif ($classes -contains "FirefoxPasswordViewWindow") {
+    } elseif ($classes -contains "KeywiseWindow") {
         Write-Host "PASS  the app's own window is up. Classes: $($classes -join ', ')"
     } else {
         # Both hosted runners draw the window. Measured on windows-latest and
-        # on windows-11-arm: the process owns FirefoxPasswordViewWindow,
+        # on windows-11-arm: the process owns KeywiseWindow,
         # tooltips_class32, IME and MSCTFIME UI within 15 seconds.
         Write-Host "FAIL  no window of any class within 15 seconds. The process is alive."
         $code = 1

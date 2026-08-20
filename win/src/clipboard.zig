@@ -7,7 +7,7 @@
 //! KeePassXC sets `ExcludeClipboardContentFromMonitorProcessing`, KeePass 2
 //! sets the two DWORD formats, and CopyQ honours any of them. These are the
 //! Windows counterpart of `org.nspasteboard.ConcealedType` in
-//! macos/Sources/FirefoxPasswordView/ClipboardWriter.swift.
+//! macos/Sources/Keywise/ClipboardWriter.swift.
 
 const std = @import("std");
 const w = @import("win32.zig");

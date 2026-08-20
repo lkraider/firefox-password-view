@@ -7,7 +7,7 @@ struct ContentView: View {
         NavigationStack {
             EntryListView(model: model)
                 .searchable(text: $model.searchText, prompt: "Search logins")
-                .navigationTitle("Firefox Passwords")
+                .navigationTitle("Keywise")
                 .toolbar {
                     ToolbarItem(placement: .principal) {
                         ProfilePicker(model: model)

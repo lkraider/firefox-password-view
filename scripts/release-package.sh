@@ -44,16 +44,16 @@ done
 # adds a ._name AppleDouble member for it, so the archive would depend on
 # whether this macOS release attaches com.apple.provenance to a fresh binary.
 # docs/REPRODUCIBLE.md has the sums.
-touch -d "$mtime" "$repo_root/zig-out/bin/ffpw"
-tar --format ustar --numeric-owner --uid 0 --gid 0 -cf - -C "$repo_root/zig-out/bin" ffpw \
-    | gzip -n -9 > "$out/ffpw-aarch64-macos.tar.gz"
+touch -d "$mtime" "$repo_root/zig-out/bin/keywise"
+tar --format ustar --numeric-owner --uid 0 --gid 0 -cf - -C "$repo_root/zig-out/bin" keywise \
+    | gzip -n -9 > "$out/keywise-aarch64-macos.tar.gz"
 
 # ditto and zip store the MS-DOS timestamp field. That field holds wall-clock
 # time, and each program reads TZ to convert an mtime into it.
 (cd "$repo_root/macos" && ./scripts/bundle.sh release)
 TZ=UTC ditto -c -k --keepParent \
-    "$repo_root/macos/.build/release/FirefoxPasswordView.app" \
-    "$out/FirefoxPasswordView-${version}-macos.zip"
+    "$repo_root/macos/.build/release/Keywise.app" \
+    "$out/Keywise-${version}-macos.zip"
 
 status=0
 for job in $cross_jobs; do
@@ -66,19 +66,19 @@ done
 # -X drops the UT extra field. That field carries the mtime as a UTC epoch, so
 # it moves whenever the stamp does.
 for arch in x86_64 arm64; do
-    exe="$repo_root/out-win-$arch/bin/FirefoxPasswordView.exe"
+    exe="$repo_root/out-win-$arch/bin/Keywise.exe"
     touch -d "$mtime" "$exe"
-    rm -f "$out/FirefoxPasswordView-${version}-windows-$arch.zip"
+    rm -f "$out/Keywise-${version}-windows-$arch.zip"
     (cd "$(dirname "$exe")" && TZ=UTC zip -X -q -9 \
-        "$out/FirefoxPasswordView-${version}-windows-$arch.zip" FirefoxPasswordView.exe)
+        "$out/Keywise-${version}-windows-$arch.zip" Keywise.exe)
 done
 
 # tui_mod links no C library, so the musl target writes a static binary. It
 # runs on any distro.
 for pair in "linux-x86_64 x86_64" "linux-arm64 aarch64"; do
     set -- $pair
-    bin="$repo_root/out-$1/bin/ffpw"
+    bin="$repo_root/out-$1/bin/keywise"
     touch -d "$mtime" "$bin"
-    tar --format ustar --numeric-owner --uid 0 --gid 0 -cf - -C "$(dirname "$bin")" ffpw \
-        | gzip -n -9 > "$out/ffpw-$2-linux.tar.gz"
+    tar --format ustar --numeric-owner --uid 0 --gid 0 -cf - -C "$(dirname "$bin")" keywise \
+        | gzip -n -9 > "$out/keywise-$2-linux.tar.gz"
 done

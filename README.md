@@ -1,6 +1,6 @@
-# ![](docs/images/icon.png) Firefox Password View
+# ![](docs/images/icon.png) Keywise
 
-[![CI](https://github.com/lkraider/firefox-password-view/actions/workflows/ci.yml/badge.svg)](https://github.com/lkraider/firefox-password-view/actions/workflows/ci.yml)
+[![CI](https://github.com/lkraider/keywise/actions/workflows/ci.yml/badge.svg)](https://github.com/lkraider/keywise/actions/workflows/ci.yml)
 
 A terminal UI, a macOS app and a Windows app show the saved logins in a
 local Firefox profile. All three read them through one Zig core. The
@@ -22,10 +22,10 @@ Windows x86_64 and Windows ARM64.
 ## Installing
 
 ```
-brew tap lkraider/firefox-password-view https://github.com/lkraider/firefox-password-view
-brew trust lkraider/firefox-password-view  # Homebrew 6.0 and newer
-brew install ffpw                          # the terminal UI
-brew install --cask firefox-password-view  # the macOS app
+brew tap lkraider/keywise https://github.com/lkraider/keywise
+brew trust lkraider/keywise  # Homebrew 6.0 and newer
+brew install keywise             # the terminal UI
+brew install --cask keywise-app  # the macOS app
 ```
 
 The app is ad-hoc signed. This project has no Apple Developer ID, so it is
@@ -33,12 +33,12 @@ not notarized. On first launch, right-click the app in Finder and choose
 Open. Gatekeeper otherwise blocks it as coming from an unidentified
 developer.
 
-On Linux, download `ffpw-x86_64-linux.tar.gz` or
-`ffpw-aarch64-linux.tar.gz` from the releases page:
+On Linux, download `keywise-x86_64-linux.tar.gz` or
+`keywise-aarch64-linux.tar.gz` from the releases page:
 
 ```
-tar -xzf ffpw-x86_64-linux.tar.gz
-install -m 755 ffpw ~/.local/bin/ffpw
+tar -xzf keywise-x86_64-linux.tar.gz
+install -m 755 keywise ~/.local/bin/keywise
 ```
 
 The binary is static, so it runs on any distro. A copy on Wayland needs
@@ -52,19 +52,19 @@ sudo apt install xclip           # X11
 
 `dnf install` and `pacman -S` take the same package names.
 
-On Windows, download `FirefoxPasswordView-<version>-windows-arm64.zip` or
+On Windows, download `Keywise-<version>-windows-arm64.zip` or
 `-windows-x86_64.zip` from the releases page and unzip it. The exe is a
 single file and needs no install. It is unsigned, so SmartScreen shows a
 warning on first launch. Choose More info, then Run anyway.
 
 ## Using it
 
-Run `ffpw`. It finds the directory holding `profiles.ini` and opens the
+Run `keywise`. It finds the directory holding `profiles.ini` and opens the
 profile your Firefox uses. It prompts for a Primary Password when the
 profile has one.
 
 macOS keeps that directory at `~/Library/Application Support/Firefox`. On
-Linux `ffpw` tries the paths below in order and reads the first one holding
+Linux `keywise` tries the paths below in order and reads the first one holding
 a `profiles.ini`:
 
 ```
@@ -92,21 +92,21 @@ you are sitting at.
 a file. On a terminal it writes nothing.
 
 ```
-ffpw | wl-copy             # press y, then q
-ffpw > /tmp/p              # the last y of the run lands in the file
+keywise | wl-copy             # press y, then q
+keywise > /tmp/p              # the last y of the run lands in the file
 ```
 
 To open another profile:
 
 ```
-ffpw --list-profiles   # one profile per line, name then path
-ffpw --profile <path>  # open that directory
+keywise --list-profiles   # one profile per line, name then path
+keywise --profile <path>  # open that directory
 ```
 
 `--list-profiles` prints the profiles to stdout and the directory it read
 to stderr.
 
-On Windows, run `FirefoxPasswordView.exe`. It reads `profiles.ini` under
+On Windows, run `Keywise.exe`. It reads `profiles.ini` under
 `%APPDATA%\Mozilla\Firefox`. The `Profile` menu lists every profile it
 found, and `--profile <path>` opens one directory.
 
@@ -200,14 +200,14 @@ zig build -Dtarget=x86_64-linux-musl  -Doptimize=ReleaseSafe
 zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseSafe
 ```
 
-`scripts/linux-launch-check.sh zig-out/bin/ffpw` drives the paths that run
+`scripts/linux-launch-check.sh zig-out/bin/keywise` drives the paths that run
 without a terminal.
 
 The released zips are built at `ReleaseSafe`. That mode keeps the bounds and
 alignment checks over the hand-written `key4.db` reader.
 
 `scripts/release-package.sh <version> <dir>` builds and archives every
-published artifact. The Linux tarballs, the macOS `ffpw` tarball and the
+published artifact. The Linux tarballs, the macOS `keywise` tarball and the
 Windows zips reproduce byte for byte on any macOS host. The macOS app zip
 does not. Its hash follows the SDK installed on the build machine.
 [`docs/REPRODUCIBLE.md`](docs/REPRODUCIBLE.md) has the settings and the
@@ -246,3 +246,8 @@ scripts/    the release, CI and fixture tooling
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
+
+## Trademarks
+
+Firefox is a trademark of the Mozilla Foundation in the US and other
+countries. This project is not affiliated with Mozilla.

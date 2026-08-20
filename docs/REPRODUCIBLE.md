@@ -24,7 +24,7 @@ that varies between builds. Stripping removes that input.
 (`lib/std/Build/Module.zig:596`), so an empty query let the compiler read the
 deployment version from the build host, and a runner image bump moved the
 published bytes. `LC_BUILD_VERSION` now reports `minos 14.0` everywhere, the
-floor `Package.swift` and `Formula/ffpw.rb` declare.
+floor `Package.swift` and `Formula/keywise.rb` declare.
 
 `zig build-exe --help` reports `--build-id ... none (default)`, so no build
 ID enters an ELF.
@@ -37,7 +37,7 @@ which Mac runs it.
 `tar --format ustar`. bsdtar defaults to "pax restricted". That format adds a
 `._name` AppleDouble member when the file carries an extended attribute. macOS
 15.6 attaches `com.apple.provenance` to a freshly linked binary that has never
-run, and 15.7.7 leaves it off. One `ffpw` at `8b49bb31` therefore archived to
+run, and 15.7.7 leaves it off. One `keywise` at `8b49bb31` therefore archived to
 `88ab0442` on 15.6 and to `b98f0c28` on 15.7.7. Under `ustar` both write
 `b98f0c28`.
 
@@ -56,12 +56,12 @@ gets the same binary inside a different `.tar.gz`.
 
 ## The macOS app zip
 
-`FirefoxPasswordView-<version>-macos.zip` holds the Swift binary, and its
+`Keywise-<version>-macos.zip` holds the Swift binary, and its
 `LC_UUID` follows the installed SDK. `vtool(1)` rewrites `LC_BUILD_VERSION`
 and has no option for `LC_UUID`. Closing this needs the macOS SDK vendored
 into every build environment, as `zig-build-macos-sdk` does for Ghostty.
 
-`Formula/ffpw.rb` and `Casks/firefox-password-view.rb` therefore carry a hash
+`Formula/keywise.rb` and `Casks/keywise-app.rb` therefore carry a hash
 from `ci.yml`'s `reproducible-build` job. `release.yml` packages on a second
 runner and compares both hashes with the assets it built. A mismatch exits
 before the upload.

@@ -1,4 +1,4 @@
-# Firefox Password View — macOS app
+# Keywise — macOS app
 
 This is a Swift package. Xcode Command Line Tools are enough to build,
 test and run it. `swift build` ad-hoc signs its output, so this needs no
@@ -7,27 +7,27 @@ signing identity. A full Xcode install also opens this package directly.
 ## Building
 
 ```
-zig build            # from the repo root: builds zig-out/lib/libffpw.a first
+zig build            # from the repo root: builds zig-out/lib/libkeywise.a first
 cd macos
 swift build
 ```
 
-`Package.swift` links `libffpw.a` through a raw `-L`/`-l` flag. That puts
+`Package.swift` links `libkeywise.a` through a raw `-L`/`-l` flag. That puts
 the file outside SwiftPM's dependency graph, so SwiftPM keeps the binary it
-linked last even after `libffpw.a` changes. Run `rm -rf macos/.build`
-before `swift build` any time `libffpw.a` changes.
+linked last even after `libkeywise.a` changes. Run `rm -rf macos/.build`
+before `swift build` any time `libkeywise.a` changes.
 
 ## Running
 
 `swift build`'s output is a plain executable. Running it directly
-(`.build/debug/FirefoxPasswordView`) launches it outside LaunchServices.
+(`.build/debug/Keywise`) launches it outside LaunchServices.
 The window opens. It cannot take keyboard focus from the terminal. Use
 `scripts/bundle.sh` to wrap it in a minimal ad-hoc-signed bundle, and
 launch that with `open`:
 
 ```
-scripts/bundle.sh          # builds core and app in release, produces .build/release/FirefoxPasswordView.app
-open .build/release/FirefoxPasswordView.app
+scripts/bundle.sh          # builds core and app in release, produces .build/release/Keywise.app
+open .build/release/Keywise.app
 ```
 
 `scripts/bundle.sh` builds release by default, the Zig core with

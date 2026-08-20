@@ -1,5 +1,5 @@
 .{
-    .name = .firefox_password_view,
+    .name = .keywise,
     .version = "1.3.0",
     .dependencies = .{
         .libvaxis = .{
@@ -8,5 +8,5 @@
         },
     },
     .paths = .{""},
-    .fingerprint = 0xb40f3241b70186c3,
+    .fingerprint = 0x30020c5eb70186c3,
 }

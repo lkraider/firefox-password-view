@@ -52,7 +52,7 @@ function Start-Build($Build) {
 }
 
 function Get-ExePath($Build) {
-    return Join-Path $Build.out "bin" "FirefoxPasswordView.exe"
+    return Join-Path $Build.out "bin" "Keywise.exe"
 }
 
 function Get-Sum($Build) {

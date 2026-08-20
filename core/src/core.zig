@@ -1,4 +1,4 @@
-//! Exports the C ABI declared in core/include/ffpw.h. Swift and C link
+//! Exports the C ABI declared in core/include/keywise.h. Swift and C link
 //! against this file. The TUI imports store.zig through root.zig.
 
 const std = @import("std");
@@ -7,7 +7,7 @@ const profiles = @import("profiles.zig");
 const store_mod = @import("store.zig");
 const logins = @import("logins.zig");
 
-const ffpw_status = enum(c_int) {
+const keywise_status = enum(c_int) {
     ok = 0,
     err_no_profile,
     err_open,
@@ -19,7 +19,7 @@ const ffpw_status = enum(c_int) {
     err_range,
 };
 
-const ffpw_entry = extern struct {
+const keywise_entry = extern struct {
     hostname: ?[*]const u8,
     hostname_len: usize,
     username: ?[*]const u8,
@@ -31,9 +31,9 @@ const ffpw_entry = extern struct {
 const flag_account_credential: u32 = 1 << 0;
 const flag_extension: u32 = 1 << 1;
 
-/// The opaque ffpw_store. `store` stays null while a Primary Password is
-/// pending, so ffpw_open can return a handle the caller passes to
-/// ffpw_unlock. The allocator, the Io and the path live here to survive
+/// The opaque keywise_store. `store` stays null while a Primary Password is
+/// pending, so keywise_open can return a handle the caller passes to
+/// keywise_unlock. The allocator, the Io and the path live here to survive
 /// that gap.
 const CStore = struct {
     gpa: std.mem.Allocator,
@@ -43,30 +43,30 @@ const CStore = struct {
 };
 
 /// This allocator frees by pointer, through libc free(). mem.Allocator.free
-/// ignores the length it is given. A caller that passes ffpw_secret_free a
+/// ignores the length it is given. A caller that passes keywise_secret_free a
 /// length shorter than the allocation still frees the whole allocation.
 const gpa = std.heap.c_allocator;
 
-/// ffpw_open's first attempt always uses an empty password. WrongPassword
+/// keywise_open's first attempt always uses an empty password. WrongPassword
 /// there means the profile has a Primary Password of its own. No caller
 /// supplied one yet.
-fn mapOpenError(err: anyerror) ffpw_status {
+fn mapOpenError(err: anyerror) keywise_status {
     return switch (err) {
         error.WrongPassword => .err_needs_password,
         else => mapCommonError(err),
     };
 }
 
-/// ffpw_unlock's password came from the caller, so WrongPassword here means
+/// keywise_unlock's password came from the caller, so WrongPassword here means
 /// that password was wrong.
-fn mapUnlockError(err: anyerror) ffpw_status {
+fn mapUnlockError(err: anyerror) keywise_status {
     return switch (err) {
         error.WrongPassword => .err_wrong_password,
         else => mapCommonError(err),
     };
 }
 
-fn mapCommonError(err: anyerror) ffpw_status {
+fn mapCommonError(err: anyerror) keywise_status {
     return switch (err) {
         error.OpenFailed => .err_no_profile,
         error.OutOfMemory => .err_oom,
@@ -104,7 +104,7 @@ fn freeProfileList(list: []profiles.Profile) void {
     gpa.free(list);
 }
 
-export fn ffpw_profile_count() callconv(.c) usize {
+export fn keywise_profile_count() callconv(.c) usize {
     var threaded: std.Io.Threaded = .init(gpa, .{});
     defer threaded.deinit();
 
@@ -113,7 +113,7 @@ export fn ffpw_profile_count() callconv(.c) usize {
     return list.len;
 }
 
-export fn ffpw_profile_at(i: u32, buf: ?[*]u8, cap: usize, needed: ?*usize) callconv(.c) ffpw_status {
+export fn keywise_profile_at(i: u32, buf: ?[*]u8, cap: usize, needed: ?*usize) callconv(.c) keywise_status {
     var threaded: std.Io.Threaded = .init(gpa, .{});
     defer threaded.deinit();
 
@@ -130,7 +130,7 @@ export fn ffpw_profile_at(i: u32, buf: ?[*]u8, cap: usize, needed: ?*usize) call
     return .ok;
 }
 
-export fn ffpw_open(profile_path_c: ?[*:0]const u8, out: ?*?*CStore) callconv(.c) ffpw_status {
+export fn keywise_open(profile_path_c: ?[*:0]const u8, out: ?*?*CStore) callconv(.c) keywise_status {
     const out_ptr = out orelse return .err_range;
     const profile_path_z = profile_path_c orelse return .err_no_profile;
     const profile_path = std.mem.span(profile_path_z);
@@ -150,8 +150,8 @@ export fn ffpw_open(profile_path_c: ?[*:0]const u8, out: ?*?*CStore) callconv(.c
     const opened = store_mod.Store.open(gpa, io, cstore.profile_path, "") catch |err| {
         const status = mapOpenError(err);
         if (status == .err_needs_password) {
-            // The handle stays alive for the ffpw_unlock call that follows.
-            // The caller releases it with ffpw_close.
+            // The handle stays alive for the keywise_unlock call that follows.
+            // The caller releases it with keywise_close.
             out_ptr.* = cstore;
         } else {
             gpa.free(cstore.profile_path);
@@ -166,7 +166,7 @@ export fn ffpw_open(profile_path_c: ?[*:0]const u8, out: ?*?*CStore) callconv(.c
     return .ok;
 }
 
-export fn ffpw_unlock(handle: ?*CStore, pw: ?[*]const u8, pw_len: usize) callconv(.c) ffpw_status {
+export fn keywise_unlock(handle: ?*CStore, pw: ?[*]const u8, pw_len: usize) callconv(.c) keywise_status {
     const cstore = handle orelse return .err_range;
     if (cstore.store != null) return .ok;
     const password = if (pw) |p| p[0..pw_len] else "";
@@ -176,7 +176,7 @@ export fn ffpw_unlock(handle: ?*CStore, pw: ?[*]const u8, pw_len: usize) callcon
     return .ok;
 }
 
-export fn ffpw_close(handle: ?*CStore) callconv(.c) void {
+export fn keywise_close(handle: ?*CStore) callconv(.c) void {
     const cstore = handle orelse return;
     if (cstore.store) |*s| s.deinit();
     cstore.threaded.deinit();
@@ -184,13 +184,13 @@ export fn ffpw_close(handle: ?*CStore) callconv(.c) void {
     cstore.gpa.destroy(cstore);
 }
 
-export fn ffpw_count(handle: ?*CStore) callconv(.c) usize {
+export fn keywise_count(handle: ?*CStore) callconv(.c) usize {
     const cstore = handle orelse return 0;
     const s = cstore.store orelse return 0;
     return s.entries.len;
 }
 
-export fn ffpw_search(handle: ?*CStore, q: ?[*]const u8, q_len: usize, out: ?[*]u32, cap: usize) callconv(.c) usize {
+export fn keywise_search(handle: ?*CStore, q: ?[*]const u8, q_len: usize, out: ?[*]u32, cap: usize) callconv(.c) usize {
     const cstore = handle orelse return 0;
     const s = &(cstore.store orelse return 0);
     const query = if (q) |p| p[0..q_len] else &[_]u8{};
@@ -213,7 +213,7 @@ fn flagsFor(kind: logins.Kind) u32 {
     };
 }
 
-fn toFFPWEntry(e: logins.Entry) ffpw_entry {
+fn toKeywiseEntry(e: logins.Entry) keywise_entry {
     return .{
         .hostname = e.hostname.ptr,
         .hostname_len = e.hostname.len,
@@ -224,29 +224,29 @@ fn toFFPWEntry(e: logins.Entry) ffpw_entry {
     };
 }
 
-export fn ffpw_entry_at(handle: ?*CStore, i: u32, out: ?*ffpw_entry) callconv(.c) ffpw_status {
+export fn keywise_entry_at(handle: ?*CStore, i: u32, out: ?*keywise_entry) callconv(.c) keywise_status {
     const cstore = handle orelse return .err_range;
     const s = cstore.store orelse return .err_needs_password;
     if (i >= s.entries.len) return .err_range;
     const o = out orelse return .err_range;
-    o.* = toFFPWEntry(s.entries[i]);
+    o.* = toKeywiseEntry(s.entries[i]);
     return .ok;
 }
 
-/// `ffpw_open` and `ffpw_unlock` decrypt every hostname and username before
+/// `keywise_open` and `keywise_unlock` decrypt every hostname and username before
 /// they return, so filling the whole list here costs one struct copy per
-/// entry. Calling `ffpw_entry_at` per row costs one FFI call per row.
-export fn ffpw_entries(handle: ?*CStore, out: ?[*]ffpw_entry, cap: usize) callconv(.c) usize {
+/// entry. Calling `keywise_entry_at` per row costs one FFI call per row.
+export fn keywise_entries(handle: ?*CStore, out: ?[*]keywise_entry, cap: usize) callconv(.c) usize {
     const cstore = handle orelse return 0;
     const s = cstore.store orelse return 0;
     if (out) |o| {
         const n = @min(cap, s.entries.len);
-        for (s.entries[0..n], 0..) |e, i| o[i] = toFFPWEntry(e);
+        for (s.entries[0..n], 0..) |e, i| o[i] = toKeywiseEntry(e);
     }
     return s.entries.len;
 }
 
-export fn ffpw_reveal(handle: ?*CStore, i: u32, out: ?*?[*]u8, len: ?*usize) callconv(.c) ffpw_status {
+export fn keywise_reveal(handle: ?*CStore, i: u32, out: ?*?[*]u8, len: ?*usize) callconv(.c) keywise_status {
     const cstore = handle orelse return .err_range;
     const s = cstore.store orelse return .err_needs_password;
     if (i >= s.entries.len) return .err_range;
@@ -265,7 +265,7 @@ export fn ffpw_reveal(handle: ?*CStore, i: u32, out: ?*?[*]u8, len: ?*usize) cal
         };
     };
 
-    // Sized to exactly plain.len. ffpw_secret_free wipes the len bytes it
+    // Sized to exactly plain.len. keywise_secret_free wipes the len bytes it
     // is handed, and that covers the whole allocation.
     const owned = cstore.gpa.alloc(u8, plain.len) catch return .err_oom;
     @memcpy(owned, plain);
@@ -274,7 +274,7 @@ export fn ffpw_reveal(handle: ?*CStore, i: u32, out: ?*?[*]u8, len: ?*usize) cal
     return .ok;
 }
 
-export fn ffpw_secret_free(handle: ?*CStore, buf: ?[*]u8, len: usize) callconv(.c) void {
+export fn keywise_secret_free(handle: ?*CStore, buf: ?[*]u8, len: usize) callconv(.c) void {
     const cstore = handle orelse return;
     const b = buf orelse return;
     if (len == 0) return;

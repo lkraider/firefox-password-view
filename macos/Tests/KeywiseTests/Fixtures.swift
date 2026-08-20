@@ -1,5 +1,5 @@
 import AppKit
-@testable import FirefoxPasswordView
+@testable import Keywise
 
 /// The committed profiles under core/testdata. swift test runs from
 /// `macos/`, so the paths are relative to it. See core/testdata/README.md

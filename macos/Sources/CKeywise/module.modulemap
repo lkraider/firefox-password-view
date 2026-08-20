@@ -1,0 +1,5 @@
+module CKeywise {
+    header "keywise.h"
+    link "keywise"
+    export *
+}

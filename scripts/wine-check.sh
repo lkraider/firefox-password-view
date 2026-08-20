@@ -2,7 +2,7 @@
 # Asserts the Windows app's behaviour under wine and exits non-zero on a
 # failure. scripts/docs-screenshots.sh writes images. This script reads results.
 #
-# Every check launches zig-out/bin/FirefoxPasswordView.exe against a copy of
+# Every check launches zig-out/bin/Keywise.exe against a copy of
 # core/testdata/sync-shaped, drives it with synthetic input, and reads the
 # result off the macOS pasteboard with pbpaste. sync-shaped gives every row a
 # different password, so pbpaste says which row acted.
@@ -30,28 +30,28 @@
 # Usage:
 #   scripts/wine-check.sh              every check
 #   scripts/wine-check.sh copy-from-list escape-hides   the named checks
-#   FFPW_SKIP_BUILD=1 scripts/wine-check.sh             reuse the existing exe
-#   FFPW_KEEP=1 scripts/wine-check.sh                   keep the work dir
-#   FFPW_WINE=/path/to/wine scripts/wine-check.sh
+#   KEYWISE_SKIP_BUILD=1 scripts/wine-check.sh             reuse the existing exe
+#   KEYWISE_KEEP=1 scripts/wine-check.sh                   keep the work dir
+#   KEYWISE_WINE=/path/to/wine scripts/wine-check.sh
 #
 # A failing run keeps its work directory and names the path. It holds every
 # capture the run took and the wine log.
 set -eu
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-work="$(mktemp -d /tmp/ffpw-winecheck.XXXXXX)"
-win_exe="$repo_root/zig-out/bin/FirefoxPasswordView.exe"
-wine="${FFPW_WINE:-/Applications/Wine Staging.app/Contents/Resources/wine/bin/wine}"
+work="$(mktemp -d /tmp/keywise-winecheck.XXXXXX)"
+win_exe="$repo_root/zig-out/bin/Keywise.exe"
+wine="${KEYWISE_WINE:-/Applications/Wine Staging.app/Contents/Resources/wine/bin/wine}"
 
 failures=0
 skips=0
 
 cleanup() {
-    pkill -f "FirefoxPasswordView.exe" 2>/dev/null || true
+    pkill -f "Keywise.exe" 2>/dev/null || true
     # wineboot starts 8 helper processes for the prefix below, and they outlive
     # both the exe and the prefix directory.
     "$repo_root/scripts/wine-shutdown.sh" "$work/wine" "$wine" 2>/dev/null || true
-    if [ "$failures" -gt 0 ] || [ -n "${FFPW_KEEP:-}" ]; then
+    if [ "$failures" -gt 0 ] || [ -n "${KEYWISE_KEEP:-}" ]; then
         echo "artifacts and wine.log stay in $work"
     else
         rm -rf "$work"
@@ -61,7 +61,7 @@ trap cleanup EXIT INT TERM
 
 # --- preflight -------------------------------------------------------------
 
-[ -x "$wine" ] || { echo "no wine at $wine. Set FFPW_WINE." >&2; exit 1; }
+[ -x "$wine" ] || { echo "no wine at $wine. Set KEYWISE_WINE." >&2; exit 1; }
 
 if ! screencapture -x "$work/probe.png" 2>/dev/null || [ ! -s "$work/probe.png" ]; then
     echo "screencapture produced nothing. Grant Screen & System Audio Recording to this terminal." >&2
@@ -74,7 +74,7 @@ if ! osascript -e 'tell application "System Events" to count processes' >/dev/nu
     exit 1
 fi
 
-[ -n "${FFPW_SKIP_BUILD:-}" ] || (cd "$repo_root" && \
+[ -n "${KEYWISE_SKIP_BUILD:-}" ] || (cd "$repo_root" && \
     ./zig/zig-aarch64-macos-0.16.0/zig build win \
     -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseSafe -Doracle=false)
 [ -x "$win_exe" ] || { echo "missing $win_exe" >&2; exit 1; }
@@ -142,7 +142,7 @@ launch() {
     i=0
     while [ $i -lt 125 ]; do
         sleep 0.2
-        app_pid="$(pgrep -f 'FirefoxPasswordView.exe' | head -1)"
+        app_pid="$(pgrep -f 'Keywise.exe' | head -1)"
         [ -n "$app_pid" ] && id="$(window_id_for_pid "$app_pid")"
         [ -n "$id" ] && break
         i=$((i + 1))
@@ -156,7 +156,7 @@ launch() {
 }
 
 quit_app() {
-    pkill -f "FirefoxPasswordView.exe" 2>/dev/null || true
+    pkill -f "Keywise.exe" 2>/dev/null || true
     sleep 0.3
     app_pid=""
 }
@@ -389,7 +389,7 @@ check_long_profile_name() {
     write_profiles_ini "$long"
     launch || { fail "$name" "no window appeared. Read $work/wine.log."; write_profiles_ini "default-release"; return; }
     sleep 5
-    if pgrep -f 'FirefoxPasswordView.exe' >/dev/null 2>&1; then
+    if pgrep -f 'Keywise.exe' >/dev/null 2>&1; then
         pass "$name"
     else
         fail "$name" "the process exited within 5 seconds. Read $work/wine.log."

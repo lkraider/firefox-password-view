@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) void {
     // -mcpu. The compiler then reads the cpu and the macOS version from the
     // build host. A runner image bump moves the published bytes.
     //
-    // 14.0 is the floor Package.swift and Formula/ffpw.rb declare. Linux and
+    // 14.0 is the floor Package.swift and Formula/keywise.rb declare. Linux and
     // Windows keep the empty query. A native build there takes its kernel and
     // glibc versions from the host.
     if (target.result.os.tag == .macos) {
@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
-    // `ffpw --version` prints this. Reading the manifest keeps the version in
+    // `keywise --version` prints this. Reading the manifest keeps the version in
     // one file. scripts/release-set-version.sh writes it, and release.yml
     // checks it against the pushed tag.
     const build_options = b.addOptions();
@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
     // covers it, derived from debug info that isn't otherwise deterministic.
     // Stripping removes that debug info, so two clean rebuilds of the same
     // source on the same machine produce identical bytes. Verified by
-    // rebuilding ffpw twice and diffing. Zero bytes differ, and the output
+    // rebuilding keywise twice and diffing. Zero bytes differ, and the output
     // filename matches. Debug keeps its symbols. That build exists for
     // debugging.
     const strip = optimize != .Debug;
@@ -57,7 +57,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "c", .module = translate_c.createModule() }},
     });
 
-    const exe = b.addExecutable(.{ .name = "ffpw-probe", .root_module = exe_mod });
+    const exe = b.addExecutable(.{ .name = "keywise-probe", .root_module = exe_mod });
     b.installArtifact(exe);
 
     const run = b.addRunArtifact(exe);
@@ -143,7 +143,7 @@ pub fn build(b: *std.Build) void {
     // win/. tui/src/main.zig calls std.process.Args.Iterator.init, and that
     // function is a compile error on Windows. It also reads HOME and joins
     // the macOS profile path.
-    const tui_exe = b.addExecutable(.{ .name = "ffpw", .root_module = tui_mod });
+    const tui_exe = b.addExecutable(.{ .name = "keywise", .root_module = tui_mod });
     if (target.result.os.tag != .windows) b.installArtifact(tui_exe);
 
     const run_tui = b.addRunArtifact(tui_exe);
@@ -203,7 +203,7 @@ pub fn build(b: *std.Build) void {
     win_mod.addWin32ResourceFile(.{ .file = b.path("win/app.rc") });
 
     const win_exe = b.addExecutable(.{
-        .name = "FirefoxPasswordView",
+        .name = "Keywise",
         .root_module = win_mod,
     });
     // The windows subsystem keeps a console window from opening behind the
@@ -235,11 +235,11 @@ pub fn build(b: *std.Build) void {
     });
 
     const core_lib = b.addLibrary(.{
-        .name = "ffpw",
+        .name = "keywise",
         .root_module = core_lib_mod,
         .linkage = .static,
     });
-    core_lib.installHeader(b.path("core/include/ffpw.h"), "ffpw.h");
+    core_lib.installHeader(b.path("core/include/keywise.h"), "keywise.h");
     b.installArtifact(core_lib);
 
     // C smoke test, exercising the static library the way Swift will.
@@ -251,7 +251,7 @@ pub fn build(b: *std.Build) void {
     smoke_mod.addCSourceFile(.{ .file = b.path("core/test/smoke.c") });
     smoke_mod.addIncludePath(b.path("core/include"));
     smoke_mod.linkLibrary(core_lib);
-    const smoke = b.addExecutable(.{ .name = "ffpw-smoke", .root_module = smoke_mod });
+    const smoke = b.addExecutable(.{ .name = "keywise-smoke", .root_module = smoke_mod });
     b.installArtifact(smoke);
 
     const run_smoke = b.addRunArtifact(smoke);

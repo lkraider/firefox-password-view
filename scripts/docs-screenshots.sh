@@ -24,38 +24,38 @@
 #   scripts/docs-screenshots.sh tui        the terminal UI only
 #   scripts/docs-screenshots.sh app        the macOS app only
 #   scripts/docs-screenshots.sh win        the Windows app only, under wine
-#   FFPW_SKIP_BUILD=1 scripts/docs-screenshots.sh   reuse the existing builds
-#   FFPW_WINE=/path/to/wine scripts/docs-screenshots.sh win
+#   KEYWISE_SKIP_BUILD=1 scripts/docs-screenshots.sh   reuse the existing builds
+#   KEYWISE_WINE=/path/to/wine scripts/docs-screenshots.sh win
 set -eu
 
 target="${1:-all}"
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 out_dir="$repo_root/docs/images"
-work="$(mktemp -d /tmp/ffpw-shots.XXXXXX)"
+work="$(mktemp -d /tmp/keywise-shots.XXXXXX)"
 sandbox="$work/home"
-app_bundle="$repo_root/macos/.build/release/FirefoxPasswordView.app"
-win_exe="$repo_root/zig-out/bin/FirefoxPasswordView.exe"
-wine="${FFPW_WINE:-/Applications/Wine Staging.app/Contents/Resources/wine/bin/wine}"
+app_bundle="$repo_root/macos/.build/release/Keywise.app"
+win_exe="$repo_root/zig-out/bin/Keywise.exe"
+wine="${KEYWISE_WINE:-/Applications/Wine Staging.app/Contents/Resources/wine/bin/wine}"
 # Screen points, title bar included. Holds the menu bar, the search box, the
 # five fixture rows and the status bar.
 win_height=270
-tui_bin="$repo_root/zig-out/bin/ffpw"
-term_title="ffpw-shot"
+tui_bin="$repo_root/zig-out/bin/keywise"
+term_title="keywise-shot"
 
 close_shot_windows() {
-    # Matches both titles, since the capture renames the window to "ffpw".
+    # Matches both titles, since the capture renames the window to "keywise".
     osascript >/dev/null 2>&1 <<EOS || true
 tell application "Terminal"
   close (every window whose custom title is "$term_title") saving no
-  close (every window whose custom title is "ffpw") saving no
+  close (every window whose custom title is "keywise") saving no
 end tell
 EOS
 }
 
 cleanup() {
-    pkill -f "$app_bundle/Contents/MacOS/FirefoxPasswordView" 2>/dev/null || true
+    pkill -f "$app_bundle/Contents/MacOS/Keywise" 2>/dev/null || true
     pkill -f "$tui_bin" 2>/dev/null || true
-    pkill -f "FirefoxPasswordView.exe" 2>/dev/null || true
+    pkill -f "Keywise.exe" 2>/dev/null || true
     # wineboot starts 8 helper processes for the prefix below, and they outlive
     # both the exe and the prefix directory.
     "$repo_root/scripts/wine-shutdown.sh" "$work/wine" "$wine" 2>/dev/null || true
@@ -194,10 +194,10 @@ mkdir -p "$out_dir"
 # --- terminal UI -----------------------------------------------------------
 
 shoot_tui() {
-    [ -n "${FFPW_SKIP_BUILD:-}" ] || (cd "$repo_root" && ./zig/zig-aarch64-macos-0.16.0/zig build)
+    [ -n "${KEYWISE_SKIP_BUILD:-}" ] || (cd "$repo_root" && ./zig/zig-aarch64-macos-0.16.0/zig build)
     [ -x "$tui_bin" ] || { echo "missing $tui_bin" >&2; exit 1; }
 
-    # The window is sized before ffpw starts so libvaxis reads the final
+    # The window is sized before keywise starts so libvaxis reads the final
     # size once. 88x10 fits the five fixture rows with no blank filler.
     osascript >/dev/null <<EOS
 tell application "Terminal"
@@ -230,14 +230,14 @@ EOS
     # the committed image carries the binary's name. The window id survives.
     osascript >/dev/null <<EOS
 tell application "Terminal"
-  set custom title of (first window whose custom title is "$term_title") to "ffpw"
+  set custom title of (first window whose custom title is "$term_title") to "keywise"
 end tell
 EOS
     sleep 1
     capture "$id" "$out_dir/tui.png"
     echo "wrote $out_dir/tui.png"
 
-    # "q" quits ffpw. Closing the window first makes Terminal ask whether to
+    # "q" quits keywise. Closing the window first makes Terminal ask whether to
     # terminate the running process, and that dialog blocks the script.
     osascript -e 'tell application "Terminal" to activate' >/dev/null
     sleep 0.5
@@ -249,7 +249,7 @@ EOS
 # --- macOS app -------------------------------------------------------------
 
 shoot_app() {
-    [ -n "${FFPW_SKIP_BUILD:-}" ] || (cd "$repo_root/macos" && ./scripts/bundle.sh release >/dev/null)
+    [ -n "${KEYWISE_SKIP_BUILD:-}" ] || (cd "$repo_root/macos" && ./scripts/bundle.sh release >/dev/null)
     [ -d "$app_bundle" ] || { echo "missing $app_bundle" >&2; exit 1; }
 
     # .build/release is a symlink to .build/arm64-apple-macosx/release. open
@@ -261,14 +261,14 @@ shoot_app() {
     # the capture cannot pick up somebody else's window. Until b3bb120 a
     # second instance also drew an empty entry list, and that put a
     # screenshot with no rows in docs/images/.
-    if pgrep -f "FirefoxPasswordView.app/Contents/MacOS" >/dev/null 2>&1; then
-        echo "quitting a running FirefoxPasswordView first"
-        pkill -f "FirefoxPasswordView.app/Contents/MacOS" || true
+    if pgrep -f "Keywise.app/Contents/MacOS" >/dev/null 2>&1; then
+        echo "quitting a running Keywise first"
+        pkill -f "Keywise.app/Contents/MacOS" || true
         sleep 2
     fi
 
     # open, so LaunchServices registers the process. Running
-    # Contents/MacOS/FirefoxPasswordView directly leaves it unregistered and
+    # Contents/MacOS/Keywise directly leaves it unregistered and
     # its window unable to become key. --env points the app at the fixture.
     open -n --env "HOME=$sandbox" -a "$app_bundle"
 
@@ -277,7 +277,7 @@ shoot_app() {
     i=0
     while [ $i -lt 20 ]; do
         sleep 1
-        pid="$(pgrep -f "$app_bundle/Contents/MacOS/FirefoxPasswordView" | head -1)"
+        pid="$(pgrep -f "$app_bundle/Contents/MacOS/Keywise" | head -1)"
         [ -n "$pid" ] && id="$(window_id_for_pid "$pid")"
         [ -n "$id" ] && break
         i=$((i + 1))
@@ -290,16 +290,16 @@ shoot_app() {
     capture "$id" "$out_dir/macos-app.png"
     echo "wrote $out_dir/macos-app.png"
 
-    pkill -f "$app_bundle/Contents/MacOS/FirefoxPasswordView" 2>/dev/null || true
+    pkill -f "$app_bundle/Contents/MacOS/Keywise" 2>/dev/null || true
 }
 
 # --- Windows app -----------------------------------------------------------
 
 shoot_win() {
-    [ -x "$wine" ] || { echo "no wine at $wine. Set FFPW_WINE." >&2; exit 1; }
+    [ -x "$wine" ] || { echo "no wine at $wine. Set KEYWISE_WINE." >&2; exit 1; }
     # The wine build on this Mac is x86_64, and Rosetta 2 runs it. The
     # aarch64-windows-gnu exe needs the ARM64 Windows VM.
-    [ -n "${FFPW_SKIP_BUILD:-}" ] || (cd "$repo_root" && \
+    [ -n "${KEYWISE_SKIP_BUILD:-}" ] || (cd "$repo_root" && \
         ./zig/zig-aarch64-macos-0.16.0/zig build win \
         -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseSafe -Doracle=false)
     [ -x "$win_exe" ] || { echo "missing $win_exe" >&2; exit 1; }
@@ -339,7 +339,7 @@ INI
     i=0
     while [ $i -lt 25 ]; do
         sleep 1
-        pid="$(pgrep -f 'FirefoxPasswordView.exe' | head -1)"
+        pid="$(pgrep -f 'Keywise.exe' | head -1)"
         [ -n "$pid" ] && id="$(window_id_for_pid "$pid")"
         [ -n "$id" ] && break
         i=$((i + 1))
@@ -371,7 +371,7 @@ INI
     "$work/trimtop" "$work/win-raw.png" "$out_dir/windows-app.png"
     echo "wrote $out_dir/windows-app.png"
 
-    pkill -f "FirefoxPasswordView.exe" 2>/dev/null || true
+    pkill -f "Keywise.exe" 2>/dev/null || true
 }
 
 case "$target" in

@@ -15,14 +15,14 @@ macOS host. `/usr/lib/libsqlite3.dylib` lives in the dyld shared cache on
 macOS 11 and later, and linking resolves through the SDK stub at
 `$(xcrun --show-sdk-path)/usr/lib/libsqlite3.tbd`. Pass `-Doracle=false` on
 a host without the Command Line Tools. The C ABI library still links libc,
-and that link needs the same SDK, so cross-compiling `libffpw.a` to macOS
+and that link needs the same SDK, so cross-compiling `libkeywise.a` to macOS
 from another host stays out of reach.
 
 `build.zig.zon`'s `.version` is the one place the version string lives.
 `build.zig` imports the manifest and hands the string to `tui_mod` as
-`build_options.version`. `ffpw --version` prints it.
+`build_options.version`. `keywise --version` prints it.
 `scripts/release-set-version.sh` writes the same string into
-`macos/Info.plist`, `win/app.rc`, `CHANGELOG.md`, `Formula/ffpw.rb` and the
+`macos/Info.plist`, `win/app.rc`, `CHANGELOG.md`, `Formula/keywise.rb` and the
 cask. `release.yml` runs that script's `--check` against the pushed tag, so a
 file left at the old version stops the release before it uploads anything.
 
@@ -35,7 +35,7 @@ Nothing else links a C library. `zig build -Dtarget=x86_64-windows-gnu`,
 `-Dtarget=aarch64-windows-gnu`, `-Dtarget=x86_64-linux-musl` and
 `-Dtarget=aarch64-linux-musl` all run on a macOS host. `tui_mod` sets no
 `link_libc`, so the two musl targets write static binaries that run on any
-distro. `linux-test` and `linux-arm-test` assert the ReleaseSafe `ffpw`
+distro. `linux-test` and `linux-arm-test` assert the ReleaseSafe `keywise`
 carries no `PT_INTERP` segment. A dynamically linked binary names its loader
 there. `file` calls a static PIE "static-pie linked", so a grep for
 "statically linked" fails on a correct binary.

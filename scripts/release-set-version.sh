@@ -7,7 +7,7 @@
 # .github/workflows/release.yml runs the check against the pushed tag. A file
 # left at the old version stops the release before it uploads anything.
 #
-# Formula/ffpw.rb and Casks/firefox-password-view.rb also hold a SHA-256 of the
+# Formula/keywise.rb and Casks/keywise-app.rb also hold a SHA-256 of the
 # built artifact. Read those from ci.yml's reproducible-build job and paste them
 # in. This script leaves them alone.
 set -eu
@@ -43,8 +43,8 @@ read_rc() { sed -n 's/^ *VALUE "ProductVersion", "\([^"]*\)".*/\1/p' win/app.rc;
 read_rc_binary() { sed -n 's/^PRODUCTVERSION \([0-9,]*\).*/\1/p' win/app.rc; }
 read_zon() { sed -n 's/^ *\.version = "\([^"]*\)".*/\1/p' build.zig.zon; }
 read_changelog() { sed -n 's/^## \[\([^]]*\)\].*/\1/p' CHANGELOG.md | head -1; }
-read_cask() { sed -n 's/^ *version "\([^"]*\)".*/\1/p' Casks/firefox-password-view.rb; }
-read_formula() { sed -n 's|.*/download/v\([^/]*\)/.*|\1|p' Formula/ffpw.rb; }
+read_cask() { sed -n 's/^ *version "\([^"]*\)".*/\1/p' Casks/keywise-app.rb; }
+read_formula() { sed -n 's|.*/download/v\([^/]*\)/.*|\1|p' Formula/keywise.rb; }
 
 check() {
     status=0
@@ -53,8 +53,8 @@ check() {
         "win/app.rc=$(read_rc)" \
         "build.zig.zon=$(read_zon)" \
         "CHANGELOG.md=$(read_changelog)" \
-        "Casks/firefox-password-view.rb=$(read_cask)" \
-        "Formula/ffpw.rb=$(read_formula)"
+        "Casks/keywise-app.rb=$(read_cask)" \
+        "Formula/keywise.rb=$(read_formula)"
     do
         found="${pair#*=}"
         if [ "$found" = "$version" ]; then
@@ -111,8 +111,8 @@ edit win/app.rc \
     -e "s/^\( *VALUE \"ProductVersion\", \)\".*\"/\1\"$version\"/"
 
 edit build.zig.zon -e "s/^\( *\.version = \)\".*\"/\1\"$version\"/"
-edit Casks/firefox-password-view.rb -e "s/^\( *version \)\".*\"/\1\"$version\"/"
-edit Formula/ffpw.rb -e "s|/download/v[^/]*/|/download/v$version/|"
+edit Casks/keywise-app.rb -e "s/^\( *version \)\".*\"/\1\"$version\"/"
+edit Formula/keywise.rb -e "s|/download/v[^/]*/|/download/v$version/|"
 
 # A heading that already names this version keeps its date.
 if [ "$(read_changelog)" != "$version" ]; then

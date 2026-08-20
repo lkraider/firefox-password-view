@@ -1,7 +1,7 @@
-class Ffpw < Formula
+class Keywise < Formula
   desc "Terminal UI to view a local Firefox profile's saved logins"
-  homepage "https://github.com/lkraider/firefox-password-view"
-  url "https://github.com/lkraider/firefox-password-view/releases/download/v1.3.0/ffpw-aarch64-macos.tar.gz"
+  homepage "https://github.com/lkraider/keywise"
+  url "https://github.com/lkraider/keywise/releases/download/v1.3.0/keywise-aarch64-macos.tar.gz"
   # scripts/release-package.sh writes this tarball byte for byte on any
   # macOS host, so a local run reproduces this hash. docs/REPRODUCIBLE.md
   # names the settings. ci.yml's reproducible-build job prints it on every
@@ -13,11 +13,11 @@ class Ffpw < Formula
   depends_on macos: :sonoma
 
   def install
-    bin.install "ffpw"
+    bin.install "keywise"
   end
 
   test do
-    assert_path_exists bin/"ffpw"
-    assert_predicate bin/"ffpw", :executable?
+    assert_path_exists bin/"keywise"
+    assert_predicate bin/"keywise", :executable?
   end
 end

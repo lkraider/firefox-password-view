@@ -2,25 +2,25 @@
 import PackageDescription
 
 let package = Package(
-    name: "FirefoxPasswordView",
+    name: "Keywise",
     platforms: [.macOS(.v14)],
     targets: [
-        .systemLibrary(name: "CFfpw", path: "Sources/CFfpw"),
+        .systemLibrary(name: "CKeywise", path: "Sources/CKeywise"),
         .executableTarget(
-            name: "FirefoxPasswordView",
-            dependencies: ["CFfpw"],
-            path: "Sources/FirefoxPasswordView",
+            name: "Keywise",
+            dependencies: ["CKeywise"],
+            path: "Sources/Keywise",
             linkerSettings: [
                 .unsafeFlags([
                     "-L../zig-out/lib",
-                    "-lffpw",
+                    "-lkeywise",
                 ])
             ]
         ),
         .testTarget(
-            name: "FirefoxPasswordViewTests",
-            dependencies: ["FirefoxPasswordView"],
-            path: "Tests/FirefoxPasswordViewTests",
+            name: "KeywiseTests",
+            dependencies: ["Keywise"],
+            path: "Tests/KeywiseTests",
             linkerSettings: [
                 // Only Command Line Tools is installed here (no full Xcode),
                 // and swift-testing's runtime lives under its Frameworks

@@ -24,8 +24,8 @@ const text_mod = @import("text.zig");
 /// so it reaches the Windows exe and nothing else.
 pub const panic = std.debug.FullPanic(crash.report);
 
-const class_name = std.unicode.utf8ToUtf16LeStringLiteral("FirefoxPasswordViewWindow");
-const window_title = std.unicode.utf8ToUtf16LeStringLiteral("Firefox Password View");
+const class_name = std.unicode.utf8ToUtf16LeStringLiteral("KeywiseWindow");
+const window_title = std.unicode.utf8ToUtf16LeStringLiteral("Keywise");
 const search_cue = std.unicode.utf8ToUtf16LeStringLiteral("Search logins");
 const masked = std.unicode.utf8ToUtf16LeStringLiteral(model_mod.masked_password);
 
@@ -74,7 +74,7 @@ pub fn main(init: std.process.Init) !u8 {
     const argv = try collectArgs(gpa, init.minimal.args);
     defer freeArgs(gpa, argv);
     const options = cli.parse(argv) catch {
-        reportFatal("Usage: FirefoxPasswordView.exe [--profile <path>]");
+        reportFatal("Usage: Keywise.exe [--profile <path>]");
         return 2;
     };
 
@@ -771,8 +771,8 @@ fn showAbout(hwnd: w.HWND) void {
     _ = w.MessageBoxW(
         hwnd,
         std.unicode.utf8ToUtf16LeStringLiteral(
-            "Firefox Password View\n\nShows the saved logins in a local Firefox profile.\n" ++
-                "https://github.com/lkraider/firefox-password-view",
+            "Keywise\n\nShows the saved logins in a local Firefox profile.\n" ++
+                "https://github.com/lkraider/keywise",
         ),
         window_title,
         w.MB_OK,

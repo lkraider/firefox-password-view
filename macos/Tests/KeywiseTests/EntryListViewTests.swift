@@ -1,14 +1,14 @@
 import AppKit
 import Observation
 import Testing
-@testable import FirefoxPasswordView
+@testable import Keywise
 
 /// SwiftUI re-invokes EntryTableView.updateNSView only when a property the
 /// enclosing body read has changed. Holding an @Observable reference
 /// registers nothing. Reading `matchedIndices` solely inside
 /// Coordinator.reload put that read outside any body evaluation. On a cold
 /// open the table then reloaded once, against an empty AppModel. The
-/// matchedIndices assignment that follows ffpw_entries invalidated nothing,
+/// matchedIndices assignment that follows keywise_entries invalidated nothing,
 /// so no second reload ran.
 @MainActor
 struct EntryListViewTests {

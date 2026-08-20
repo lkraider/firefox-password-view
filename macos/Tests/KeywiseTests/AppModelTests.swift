@@ -1,5 +1,5 @@
 import Testing
-@testable import FirefoxPasswordView
+@testable import Keywise
 
 @MainActor
 struct AppModelTests {
@@ -142,7 +142,7 @@ struct AppModelTests {
 
         await model.copy(at: 0)
         #expect(clipboard.written.isEmpty)
-        #expect(model.statusMessage == FFPWError.legacy3DES.errorDescription)
+        #expect(model.statusMessage == KeywiseError.legacy3DES.errorDescription)
     }
 
     /// The app gives a revealed password 30 seconds. This model gets 50 ms.

@@ -15,14 +15,14 @@ pub const Options = struct {
 pub const Error = error{ MissingValue, UnknownFlag };
 
 pub const usage =
-    \\ffpw -- view a local Firefox profile's saved logins
+    \\keywise -- view a local Firefox profile's saved logins
     \\
     \\Usage:
-    \\  ffpw                     open the profile Firefox uses
-    \\  ffpw --profile <path>    open the profile in <path>
-    \\  ffpw --list-profiles     print every profile in profiles.ini
-    \\  ffpw --version           print the version
-    \\  ffpw --help              print this text
+    \\  keywise                     open the profile Firefox uses
+    \\  keywise --profile <path>    open the profile in <path>
+    \\  keywise --list-profiles     print every profile in profiles.ini
+    \\  keywise --version           print the version
+    \\  keywise --help              print this text
     \\
     \\Keys:
     \\  /            search, enter or escape leaves the field

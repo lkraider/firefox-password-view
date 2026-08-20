@@ -1,12 +1,12 @@
 import Testing
-@testable import FirefoxPasswordView
+@testable import Keywise
 
 /// Exercises the Swift bridging layer against the same fixtures the Zig
 /// tests use. The Zig tests prove the crypto. This only checks that
-/// FFPWStore marshals the C ABI correctly.
-struct FFPWStoreTests {
+/// KeywiseStore marshals the C ABI correctly.
+struct KeywiseStoreTests {
     @Test func freshFixtureOpensAndDecrypts() async {
-        let store = FFPWStore()
+        let store = KeywiseStore()
         let (needsPassword, error) = await store.open(profilePath: fixture("fresh"))
         #expect(error == nil)
         #expect(!needsPassword)
@@ -39,7 +39,7 @@ struct FFPWStoreTests {
     }
 
     @Test func primaryFixtureNeedsPasswordAndRejectsWrongOne() async {
-        let store = FFPWStore()
+        let store = KeywiseStore()
         let (needsPassword, error) = await store.open(profilePath: fixture("primary"))
         #expect(error == nil)
         #expect(needsPassword)
@@ -56,7 +56,7 @@ struct FFPWStoreTests {
     }
 
     @Test func unmigratedFixtureReportsLegacy3DES() async {
-        let store = FFPWStore()
+        let store = KeywiseStore()
         let (needsPassword, error) = await store.open(profilePath: fixture("unmigrated"))
         #expect(error == nil)
         #expect(!needsPassword)
@@ -77,7 +77,7 @@ struct FFPWStoreTests {
     }
 
     @Test func syncShapedFixtureLabelsAccountAndExtensionRows() async {
-        let store = FFPWStore()
+        let store = KeywiseStore()
         let (needsPassword, error) = await store.open(profilePath: fixture("sync-shaped"))
         #expect(error == nil)
         #expect(!needsPassword)
@@ -100,8 +100,8 @@ struct FFPWStoreTests {
         await store.close()
     }
 
-    @Test func everyFFPWErrorCaseHasItsOwnMessage() {
-        let cases: [FFPWError] = [
+    @Test func everyKeywiseErrorCaseHasItsOwnMessage() {
+        let cases: [KeywiseError] = [
             .noProfile, .openFailed, .needsPassword, .wrongPassword,
             .legacy3DES, .outOfMemory, .io, .range, .unknown(99),
         ]

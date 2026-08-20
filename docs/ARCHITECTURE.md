@@ -45,14 +45,14 @@ core/src/
   logins.zig     decrypts and classifies logins.json entries
   store.zig      owns the arena, the keys, the entries, and the search filter
   messages.zig   the text a front end shows for a core failure
-  core.zig       exports the C ABI the macOS app links, core/include/ffpw.h
+  core.zig       exports the C ABI the macOS app links, core/include/keywise.h
   root.zig       the module a front end imports through
   main.zig       validation probe
   c.h            the stdlib header for addTranslateC, for getenv
   tests.zig      NIST and DER vectors, and fixture round-trips
 core/test/
   oracle.zig     diffs sqlitedb.zig against the system sqlite3
-  smoke.c        calls every function in ffpw.h
+  smoke.c        calls every function in keywise.h
 build.zig
 tui/src/        the libvaxis TUI, imports store.zig through root.zig
 macos/          the SwiftUI app, a Swift package linking core.zig's static library
@@ -61,7 +61,7 @@ scripts/               every file carries the prefix of the group it serves
   ci-compare-sums.sh      asserts every build host recorded one sum per target
   docs-screenshots.sh     writes the README images
   docs-window-list.swift  lists every on-screen window and its bounds
-  linux-launch-check.sh   drives the ffpw paths that run without a terminal
+  linux-launch-check.sh   drives the keywise paths that run without a terminal
   release-package.sh      builds and archives every published artifact
   release-set-version.sh  writes the release version, or compares it with a tag
   test-mkfixtures.py      writes every fixture under core/testdata/
@@ -131,16 +131,16 @@ startup fails the job.
 
 ## Linking the core from another front end
 
-`zig build` installs the static library at `zig-out/lib/libffpw.a` and the
-header at `zig-out/include/ffpw.h`. A front end links those two. Any
+`zig build` installs the static library at `zig-out/lib/libkeywise.a` and the
+header at `zig-out/include/keywise.h`. A front end links those two. Any
 language with a C FFI can call them. The SwiftUI app links them through a
 raw `-L`/`-l` flag and uses no bridging header.
 
-Call `ffpw_open` first. It returns `FFPW_ERR_NEEDS_PASSWORD` for a profile
-with a Primary Password, so call `ffpw_unlock` next. Then `ffpw_entries`
-fills a whole list in one call, `ffpw_search` filters it, and `ffpw_reveal`
-returns one password. Release that password with `ffpw_secret_free`. It
-zeroes the buffer before freeing it. One `ffpw_store` belongs to one
+Call `keywise_open` first. It returns `KEYWISE_ERR_NEEDS_PASSWORD` for a profile
+with a Primary Password, so call `keywise_unlock` next. Then `keywise_entries`
+fills a whole list in one call, `keywise_search` filters it, and `keywise_reveal`
+returns one password. Release that password with `keywise_secret_free`. It
+zeroes the buffer before freeing it. One `keywise_store` belongs to one
 thread.
 
 `core/test/smoke.c` calls every function in the header in order and runs as
@@ -199,7 +199,7 @@ branch and inside the default-profile branch. Resolving it any earlier makes
 a populated root a precondition for every run, including a run that names
 its own profile directory.
 
-With no root found, `ffpw` prints every path it tried and exits 1.
+With no root found, `keywise` prints every path it tried and exits 1.
 `--list-profiles` prints the resolved root to stderr and the profiles to
 stdout, so `cut -f1` over stdout keeps working.
 
@@ -223,7 +223,7 @@ clipboard, so a paste into an XWayland window returns nothing.
 
 The status line reads `copied` on every press. `wl-copy` ships in the
 `wl-clipboard` package, `xclip` in `xclip` and `xsel` in `xsel`.
-`README.md` and `ffpw --help` name them.
+`README.md` and `keywise --help` name them.
 
 ### The stdout path
 
@@ -232,14 +232,14 @@ The status line reads `copied` on every press. `wl-copy` ships in the
 after `app.run` returns, with no trailing newline. The last `y` of the run
 is what a reader receives.
 
-    ffpw                    # stdout is the terminal, so nothing is written
-    ffpw | wl-copy          # stdout is a pipe, so the password goes down it
-    ffpw > /tmp/p           # stdout is a file, so the password lands there
+    keywise                    # stdout is the terminal, so nothing is written
+    keywise | wl-copy          # stdout is a pipe, so the password goes down it
+    keywise > /tmp/p           # stdout is a file, so the password lands there
 
 libvaxis opens `/dev/tty` directly, so the UI survives a pipe. An
-interactive `ffpw` writes into terminal scrollback, into a tmux buffer and
+interactive `keywise` writes into terminal scrollback, into a tmux buffer and
 into `script` output, and the tty check keeps the password out of all
-three. The helper chain runs independently of this, so `ffpw > /tmp/p`
+three. The helper chain runs independently of this, so `keywise > /tmp/p`
 behaves the same on a host with `xclip` and on one without it. A `y` press
 is what puts bytes anywhere, so a redirect alone writes nothing.
 
@@ -248,7 +248,7 @@ password field breaks a login form, so the write ends without one. Bytes
 already in a pipe cannot be retracted, so buffering lets the last `y`
 replace the one before it. The write ends with `catch {}`. A reader that
 exits first gives `error.BrokenPipe`, and a `try` would make
-`ffpw | head -c 5` exit non-zero with a trace.
+`keywise | head -c 5` exit non-zero with a trace.
 
 Each platform marks a copied password so a clipboard manager skips it.
 macOS writes the `org.nspasteboard.ConcealedType` pasteboard type.
@@ -282,6 +282,6 @@ on any platform.
   carries one string.
 - The Windows TUI is out of scope. `tui/src/main.zig` calls
   `std.process.Args.Iterator.init`, and that function is a compile error on
-  Windows. `build.zig` installs `ffpw` only for a non-Windows target.
+  Windows. `build.zig` installs `keywise` only for a non-Windows target.
 - The Windows app follows the system dark-mode setting at startup only. It
   reads `AppsUseLightTheme` once and handles no `WM_SETTINGCHANGE`.

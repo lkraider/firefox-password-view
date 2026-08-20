@@ -103,7 +103,7 @@ func renderPNG(size: Double) -> Data {
 
 let output = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "Icon.icns"
 let iconset = URL(fileURLWithPath: NSTemporaryDirectory())
-    .appendingPathComponent("ffpw-icon-\(getpid()).iconset")
+    .appendingPathComponent("keywise-icon-\(getpid()).iconset")
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 defer { try? FileManager.default.removeItem(at: iconset) }
 

@@ -24,7 +24,7 @@ pub var model: ?*model_mod.Model = null;
 
 var reporting = false;
 
-const title = std.unicode.utf8ToUtf16LeStringLiteral("Firefox Password View");
+const title = std.unicode.utf8ToUtf16LeStringLiteral("Keywise");
 
 const headline = "The app hit a bug and has to close.";
 
@@ -51,7 +51,7 @@ pub fn report(msg: []const u8, first_trace_addr: ?usize) noreturn {
         \\Return address: 0x{x}
         \\
         \\Please report this at
-        \\https://github.com/lkraider/firefox-password-view/issues
+        \\https://github.com/lkraider/keywise/issues
     , .{ headline, msg, first_trace_addr orelse 0 }) catch headline;
 
     // UTF-8 spends at least one byte per UTF-16 unit, so this holds whatever

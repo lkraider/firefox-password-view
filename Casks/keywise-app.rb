@@ -1,4 +1,4 @@
-cask "firefox-password-view" do
+cask "keywise-app" do
   version "1.3.0"
   # This is CI's hash. The zip holds the Swift binary, and its LC_UUID
   # follows the macOS SDK installed on the build machine, so a local run
@@ -7,17 +7,17 @@ cask "firefox-password-view" do
   # every push.
   sha256 "5df86c93b89e9eef94288cdb420bf0a2361e6315e02ba6b4f56d0c5afd710c69"
 
-  url "https://github.com/lkraider/firefox-password-view/releases/download/v#{version}/FirefoxPasswordView-#{version}-macos.zip"
-  name "Firefox Password View"
+  url "https://github.com/lkraider/keywise/releases/download/v#{version}/Keywise-#{version}-macos.zip"
+  name "Keywise"
   desc "Views a local Firefox profile's saved logins"
-  homepage "https://github.com/lkraider/firefox-password-view"
+  homepage "https://github.com/lkraider/keywise"
 
   depends_on arch: :arm64
   depends_on macos: :sonoma
 
-  app "FirefoxPasswordView.app"
+  app "Keywise.app"
 
-  zap trash: "~/Library/Preferences/br.com.nkey.FirefoxPasswordView.plist"
+  zap trash: "~/Library/Preferences/br.com.nkey.Keywise.plist"
 
   # The app is ad-hoc signed. This project has no Apple Developer ID, so
   # it is not notarized. Gatekeeper otherwise blocks a first launch as
@@ -27,7 +27,7 @@ cask "firefox-password-view" do
       This app is ad-hoc signed. It is not notarized. On first launch, either:
         - right-click the app in Finder and choose Open, or
         - remove the quarantine attribute yourself:
-          xattr -cr "#{appdir}/FirefoxPasswordView.app"
+          xattr -cr "#{appdir}/Keywise.app"
     EOS
   end
 end

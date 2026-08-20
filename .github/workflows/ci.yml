@@ -187,15 +187,15 @@ jobs:
             -Dtarget=x86_64-linux-musl -Doptimize=ReleaseSafe
           # `file` calls a static PIE "static-pie linked", so a grep for
           # "statically linked" fails on a correct binary. PT_INTERP decides.
-          count=$(readelf -l zig-out/bin/ffpw | grep -c INTERP || true)
-          [ "$count" -eq 0 ] || { echo "ffpw carries a PT_INTERP segment" >&2; exit 1; }
-          sum=$(sha256sum zig-out/bin/ffpw | cut -d' ' -f1)
+          count=$(readelf -l zig-out/bin/keywise | grep -c INTERP || true)
+          [ "$count" -eq 0 ] || { echo "keywise carries a PT_INTERP segment" >&2; exit 1; }
+          sum=$(sha256sum zig-out/bin/keywise | cut -d' ' -f1)
           echo "sha256 $sum  x86_64-linux-musl  built on ubuntu-latest"
           echo "- \`x86_64-linux-musl\` built on \`ubuntu-latest\`: \`$sum\`" >> "$GITHUB_STEP_SUMMARY"
           echo "sum=$sum" >> "$GITHUB_OUTPUT"
 
       - name: Drive the paths that run without a terminal
-        run: ./scripts/linux-launch-check.sh zig-out/bin/ffpw
+        run: ./scripts/linux-launch-check.sh zig-out/bin/keywise
 
   linux-arm-test:
     # Runs the aarch64 binary a release ships. ubuntu-24.04-arm is free for a
@@ -231,15 +231,15 @@ jobs:
         run: |
           ./zig/zig-aarch64-linux-${ZIG_VERSION}/zig build \
             -Dtarget=aarch64-linux-musl -Doptimize=ReleaseSafe
-          count=$(readelf -l zig-out/bin/ffpw | grep -c INTERP || true)
-          [ "$count" -eq 0 ] || { echo "ffpw carries a PT_INTERP segment" >&2; exit 1; }
-          sum=$(sha256sum zig-out/bin/ffpw | cut -d' ' -f1)
+          count=$(readelf -l zig-out/bin/keywise | grep -c INTERP || true)
+          [ "$count" -eq 0 ] || { echo "keywise carries a PT_INTERP segment" >&2; exit 1; }
+          sum=$(sha256sum zig-out/bin/keywise | cut -d' ' -f1)
           echo "sha256 $sum  aarch64-linux-musl  built on ubuntu-24.04-arm"
           echo "- \`aarch64-linux-musl\` built on \`ubuntu-24.04-arm\`: \`$sum\`" >> "$GITHUB_STEP_SUMMARY"
           echo "sum=$sum" >> "$GITHUB_OUTPUT"
 
       - name: Drive the paths that run without a terminal
-        run: ./scripts/linux-launch-check.sh zig-out/bin/ffpw
+        run: ./scripts/linux-launch-check.sh zig-out/bin/keywise
 
   compare-sums:
     # Asserts that every build host produced the same exe. reproducible-build,
@@ -316,8 +316,8 @@ jobs:
       - name: Record each cross-compiled binary's sum
         id: sums
         run: |
-          for pair in "win-x86_64 FirefoxPasswordView.exe" "win-arm64 FirefoxPasswordView.exe" \
-                      "linux-x86_64 ffpw" "linux-arm64 ffpw"; do
+          for pair in "win-x86_64 Keywise.exe" "win-arm64 Keywise.exe" \
+                      "linux-x86_64 keywise" "linux-arm64 keywise"; do
             set -- $pair
             sum=$(shasum -a 256 "out-$1/bin/$2" | cut -d' ' -f1)
             echo "sha256 $sum  $1  built on macOS ARM64"

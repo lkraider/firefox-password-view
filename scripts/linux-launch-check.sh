@@ -1,5 +1,5 @@
 #!/bin/sh
-# Drives the ffpw paths that run without a terminal. Exits non-zero on a
+# Drives the keywise paths that run without a terminal. Exits non-zero on a
 # failure.
 # ci.yml's two Linux jobs run this after the ReleaseSafe build.
 #
@@ -11,12 +11,12 @@
 # either list fails this script.
 set -eu
 
-ffpw="${1:-zig-out/bin/ffpw}"
+keywise="${1:-zig-out/bin/keywise}"
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 fixture="$repo_root/core/testdata/two-profiles"
 
-[ -x "$ffpw" ] || { echo "FAIL  no executable at $ffpw" >&2; exit 1; }
-ffpw="$(cd "$(dirname "$ffpw")" && pwd)/$(basename "$ffpw")"
+[ -x "$keywise" ] || { echo "FAIL  no executable at $keywise" >&2; exit 1; }
+keywise="$(cd "$(dirname "$keywise")" && pwd)/$(basename "$keywise")"
 
 roots=".mozilla/firefox snap/firefox/common/.mozilla/firefox .var/app/org.mozilla.firefox/.mozilla/firefox"
 
@@ -53,7 +53,7 @@ for rel in $roots; do
 
     out="$tmp/out"
     err="$tmp/err"
-    HOME="$home" "$ffpw" --list-profiles > "$out" 2> "$err" \
+    HOME="$home" "$keywise" --list-profiles > "$out" 2> "$err" \
         || fail "--list-profiles exited non-zero for $rel"
 
     grep -q '^default	' "$out" || fail "$rel: no 'default' row on stdout"
@@ -67,7 +67,7 @@ begin
 home="$tmp/both"
 plant "$home/.mozilla/firefox"
 plant "$home/snap/firefox/common/.mozilla/firefox"
-HOME="$home" "$ffpw" --list-profiles > "$tmp/out" 2> "$tmp/err" \
+HOME="$home" "$keywise" --list-profiles > "$tmp/out" 2> "$tmp/err" \
     || fail "--list-profiles exited non-zero with two roots"
 grep -qx "$home/.mozilla/firefox" "$tmp/err" || fail "two roots: took $(cat "$tmp/err")"
 finish "the first populated root wins"
@@ -78,7 +78,7 @@ finish "the first populated root wins"
 begin
 bare="$tmp/no-firefox"
 mkdir -p "$bare"
-HOME="$bare" "$ffpw" --profile "$fixture/Profiles/real.default-release" \
+HOME="$bare" "$keywise" --profile "$fixture/Profiles/real.default-release" \
     > "$tmp/out" 2> "$tmp/err" || true
 if grep -q "found no profiles.ini" "$tmp/err"; then
     fail "--profile walked the roots: $(cat "$tmp/err")"
@@ -89,7 +89,7 @@ finish "--profile opens a directory with no root present"
 begin
 empty="$tmp/empty"
 mkdir -p "$empty"
-if HOME="$empty" "$ffpw" > "$tmp/out" 2> "$tmp/err"; then
+if HOME="$empty" "$keywise" > "$tmp/out" 2> "$tmp/err"; then
     fail "an empty HOME exited 0"
 fi
 for rel in $roots; do
@@ -99,7 +99,7 @@ finish "the error names every path searched"
 
 # 5. --help.
 begin
-"$ffpw" --help > "$tmp/out" 2>&1 || fail "--help exited non-zero"
+"$keywise" --help > "$tmp/out" 2>&1 || fail "--help exited non-zero"
 grep -q -- "--profile" "$tmp/out" || fail "--help omits --profile"
 finish "--help prints the usage text"
 

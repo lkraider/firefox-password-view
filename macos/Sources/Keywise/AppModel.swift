@@ -7,7 +7,7 @@ final class AppModel {
     private(set) var profiles: [Profile] = []
     var selectedProfile: Profile?
 
-    private var store = FFPWStore()
+    private var store = KeywiseStore()
     private(set) var matchedIndices: [UInt32] = []
     /// Fetched once when the profile opens. The core decrypts every hostname
     /// and username during that open, so drawing a row is one index into
@@ -49,9 +49,9 @@ final class AppModel {
     }
 
     /// profiles.ini lists profiles Firefox abandoned, including the one the
-    /// legacy Default=1 flag points at. Those have no key4.db, and ffpw_open
+    /// legacy Default=1 flag points at. Those have no key4.db, and keywise_open
     /// fails on them. A profile that has one either opens or reports
-    /// FFPW_ERR_NEEDS_PASSWORD, and `attemptOpen` returns nil for both.
+    /// KEYWISE_ERR_NEEDS_PASSWORD, and `attemptOpen` returns nil for both.
     func start() async {
         profiles = listProfiles()
         for profile in profiles {
@@ -67,7 +67,7 @@ final class AppModel {
     func selectProfile(_ profile: Profile) async {
         await forgetRevealed()
         await store.close()
-        store = FFPWStore()
+        store = KeywiseStore()
         selectedProfile = profile
         entries = []
         matchedIndices = []
@@ -82,7 +82,7 @@ final class AppModel {
 
     /// Hands the error back to the caller. `start()` moves on to the next
     /// profile. `selectProfile()` puts the message in the status bar.
-    private func attemptOpen(_ profile: Profile) async -> FFPWError? {
+    private func attemptOpen(_ profile: Profile) async -> KeywiseError? {
         let (needsPw, error) = await store.open(profilePath: profile.path)
         needsPassword = needsPw
         if let error { return error }

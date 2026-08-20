@@ -28,10 +28,10 @@ fi
 # below.
 swift build -c "$config" -Xswiftc -gnone
 
-app=".build/$config/FirefoxPasswordView.app"
+app=".build/$config/Keywise.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp ".build/$config/FirefoxPasswordView" "$app/Contents/MacOS/FirefoxPasswordView"
+cp ".build/$config/Keywise" "$app/Contents/MacOS/Keywise"
 cp "Info.plist" "$app/Contents/Info.plist"
 # Info.plist's CFBundleIconFile names this file. scripts/make-icon.swift
 # draws it, and the committed .icns is what a build copies.
