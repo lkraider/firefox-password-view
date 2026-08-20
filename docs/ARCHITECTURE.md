@@ -60,6 +60,7 @@ win/src/        the Win32 app, importing the core module directly
 scripts/               every file carries the prefix of the group it serves
   ci-compare-sums.sh      asserts every build host recorded one sum per target
   docs-screenshots.sh     writes the README images
+  docs-social-preview.py  writes the two share cards from tui.png and icon.png
   docs-window-list.swift  lists every on-screen window and its bounds
   linux-launch-check.sh   drives the keywise paths that run without a terminal
   release-package.sh      builds and archives every published artifact
@@ -76,6 +77,15 @@ scripts/               every file carries the prefix of the group it serves
 
 Every script here needs a Mac to run. A `mac-` prefix would mark every file
 in the listing above.
+
+`docs-social-preview.py` imports Pillow. Every other Python script here reads
+the standard library alone. It also reads the two Georgia faces under
+`/System/Library/Fonts/Supplemental`. It writes `docs/images/social-preview.png`
+at 1280x640 for the repo's Social preview field and for `twitter:image`, and
+`docs/images/social-og.png` at 1200x630 for `og:image`. Both embed
+`docs/images/tui.png`, so retaking that screenshot leaves both cards showing
+the old content. The render reproduces byte for byte, so a rerun followed by
+`git diff --stat docs/images/` reports it.
 
 Two scripts compile `docs-window-list.swift`. `docs-screenshots.sh` compiles
 it for the Terminal capture, the macOS app capture and the wine capture.
