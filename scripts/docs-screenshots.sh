@@ -210,9 +210,19 @@ shoot_tui() {
     tui_window="$(osascript <<EOS
 tell application "Terminal"
   activate
+  set priorIds to id of every window
   do script ""
   delay 1
-  set w to front window
+  -- The id comes from the difference against priorIds. front window reads
+  -- whichever window is forward at that instant, and a new window that has
+  -- not come forward yet leaves that pointing at another window on this
+  -- desktop. close_shot_window then closes that one.
+  set newId to 0
+  repeat with w in windows
+    if priorIds does not contain (id of w) then set newId to (id of w)
+  end repeat
+  if newId = 0 then error "Terminal opened no new window"
+  set w to window id newId
   set number of rows of w to 10
   set number of columns of w to 88
   tell selected tab of w
@@ -220,7 +230,7 @@ tell application "Terminal"
     set title displays custom title to false
   end tell
   delay 0.5
-  return (id of w) as text
+  return newId as text
 end tell
 EOS
 )"
