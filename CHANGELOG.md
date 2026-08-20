@@ -2,6 +2,53 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0] - 2026-08-20
+
+### Changed
+
+- The product is Keywise. Mozilla's trademark policy forbids a product name
+  that leads with Firefox, so the name slot carries no Mozilla mark now. The
+  tree held `ffpw`, `FirefoxPasswordView` and `firefox-password-view` for one
+  product, and one token replaces all three.
+- **Breaking.** The C ABI renames every symbol. Functions move from the
+  `ffpw_` prefix to `keywise_` and constants from `FFPW_` to `KEYWISE_`.
+  `zig build` installs `zig-out/lib/libkeywise.a` and
+  `zig-out/include/keywise.h`. A program linking the library needs an edit.
+- **Breaking.** The terminal command is `keywise`. The macOS app is
+  `Keywise.app` and the Windows executable is `Keywise.exe`. The macOS bundle
+  identifier is `br.com.nkey.Keywise`, so a 1.x install stays on disk beside
+  this one.
+- **Breaking.** The release assets carry new filenames:
+  `Keywise-<version>-macos.zip`, `Keywise-<version>-windows-arm64.zip`,
+  `Keywise-<version>-windows-x86_64.zip`, `keywise-aarch64-macos.tar.gz`,
+  `keywise-x86_64-linux.tar.gz` and `keywise-aarch64-linux.tar.gz`. A script
+  that downloads a 1.x filename needs an edit.
+- **Breaking.** The tap and both tokens changed:
+
+  ```
+  brew tap lkraider/keywise https://github.com/lkraider/keywise
+  brew install lkraider/keywise/keywise
+  brew install --cask lkraider/keywise/keywise-app
+  ```
+
+  Run `brew untap lkraider/firefox-password-view` after uninstalling the 1.x
+  formula and cask.
+- **Breaking.** The repository is `lkraider/keywise`. GitHub redirects the old
+  path, and that covers the v1.0.0 to v1.3.0 download URLs.
+- `FFPW_SKIP_BUILD` and `FFPW_WINE` became `KEYWISE_SKIP_BUILD` and
+  `KEYWISE_WINE`.
+- `build.zig.zon` declares `.name = .keywise`. A Zig fingerprint holds
+  `crc32(name)` in its high 32 bits, so that half moved to `0x30020c5e`. The
+  low half stays, so the package keeps its identity.
+- `docs/images/tui.png` reads `tui — keywise` in its title bar. The 1.3.0
+  image read the home folder's name of the machine that took it.
+
+### Added
+
+- `README.md` carries the trademark attribution notice Mozilla's policy asks
+  for. The prose keeps the word Firefox where it states what the tool reads,
+  which the policy's "You May" list allows.
+
 ## [1.3.0] - 2026-08-19
 
 ### Added
