@@ -40,16 +40,20 @@ wine="${KEYWISE_WINE:-/Applications/Wine Staging.app/Contents/Resources/wine/bin
 # five fixture rows and the status bar.
 win_height=270
 tui_bin="$repo_root/zig-out/bin/keywise"
-term_title="keywise-shot"
+# Terminal renders the basename of the shell's working directory as the first
+# title segment. shoot_tui runs the TUI from here, so that segment reads "tui".
+tui_cwd="$work/tui"
+tui_title="tui — keywise"
+# shoot_tui fills this with the window it opened. Every other Terminal window
+# on this desktop belongs to the person running the script.
+tui_window=""
 
-close_shot_windows() {
-    # Matches both titles, since the capture renames the window to "keywise".
+close_shot_window() {
+    [ -n "$tui_window" ] || return 0
     osascript >/dev/null 2>&1 <<EOS || true
-tell application "Terminal"
-  close (every window whose custom title is "$term_title") saving no
-  close (every window whose custom title is "keywise") saving no
-end tell
+tell application "Terminal" to close window id $tui_window saving no
 EOS
+    tui_window=""
 }
 
 cleanup() {
@@ -59,7 +63,7 @@ cleanup() {
     # wineboot starts 8 helper processes for the prefix below, and they outlive
     # both the exe and the prefix directory.
     "$repo_root/scripts/wine-shutdown.sh" "$work/wine" "$wine" 2>/dev/null || true
-    close_shot_windows
+    close_shot_window
     rm -rf "$work"
 }
 trap cleanup EXIT INT TERM
@@ -91,11 +95,6 @@ window_id_for_pid() {
 # window_bounds_for_pid <pid> -> "x y w h" on stdout, empty when absent
 window_bounds_for_pid() {
     "$work/window-list" | awk -F'\t' -v p="$1" '$2==p {print $5, $6, $7, $8; exit}'
-}
-
-# window_id_for_terminal -> window number of the Terminal window titled $term_title
-window_id_for_terminal() {
-    "$work/window-list" | awk -F'\t' -v t="$term_title" '$3=="Terminal" && index($4, t) {print $1; exit}'
 }
 
 # capture <window-id> <output-path>
@@ -197,19 +196,45 @@ shoot_tui() {
     [ -n "${KEYWISE_SKIP_BUILD:-}" ] || (cd "$repo_root" && ./zig/zig-aarch64-macos-0.16.0/zig build)
     [ -x "$tui_bin" ] || { echo "missing $tui_bin" >&2; exit 1; }
 
+    mkdir -p "$tui_cwd"
+
+    # Terminal's AppleScript window id is the CoreGraphics window number that
+    # screencapture -l takes, so this needs no search through the window list.
+    #
     # The window is sized before keywise starts so libvaxis reads the final
     # size once. 88x10 fits the five fixture rows with no blank filler.
-    osascript >/dev/null <<EOS
+    #
+    # Terminal composes the title from four segments. Two of them have a tab
+    # property that turns them off. The working directory and the running
+    # process have none, so the title reads "<basename of cwd> — <process>".
+    tui_window="$(osascript <<EOS
 tell application "Terminal"
   activate
   do script ""
   delay 1
-  set number of rows of front window to 10
-  set number of columns of front window to 88
-  set custom title of front window to "$term_title"
+  set w to front window
+  set number of rows of w to 10
+  set number of columns of w to 88
+  tell selected tab of w
+    set title displays window size to false
+    set title displays custom title to false
+  end tell
   delay 0.5
-  do script "clear; HOME=$sandbox $tui_bin" in front window
+  return (id of w) as text
 end tell
+EOS
+)"
+    [ -n "$tui_window" ] || { echo "Terminal opened no window" >&2; exit 1; }
+
+    # cd on its own line, because Terminal reads the working directory from the
+    # escape sequence /etc/zshrc emits at a prompt. A cd on the same line as
+    # the binary draws no prompt, and the title keeps the old directory.
+    osascript >/dev/null <<EOS
+tell application "Terminal" to do script "cd $tui_cwd" in window id $tui_window
+EOS
+    sleep 2
+    osascript >/dev/null <<EOS
+tell application "Terminal" to do script "clear; HOME=$sandbox $tui_bin" in window id $tui_window
 EOS
     sleep 3
 
@@ -223,18 +248,15 @@ EOS
     done
     sleep 1
 
-    id="$(window_id_for_terminal)"
-    [ -n "$id" ] || { echo "no Terminal window titled $term_title" >&2; exit 1; }
+    # The title bar lands in the committed image, so read it before the
+    # capture. A stale directory or a shell that never started shows up here.
+    shown="$(osascript -e "tell application \"Terminal\" to get name of window id $tui_window")"
+    [ "$shown" = "$tui_title" ] || {
+        echo "title bar reads '$shown', wanted '$tui_title'" >&2
+        exit 1
+    }
 
-    # $term_title exists to find the window. Rename it before the capture so
-    # the committed image carries the binary's name. The window id survives.
-    osascript >/dev/null <<EOS
-tell application "Terminal"
-  set custom title of (first window whose custom title is "$term_title") to "keywise"
-end tell
-EOS
-    sleep 1
-    capture "$id" "$out_dir/tui.png"
+    capture "$tui_window" "$out_dir/tui.png"
     echo "wrote $out_dir/tui.png"
 
     # "q" quits keywise. Closing the window first makes Terminal ask whether to
@@ -243,7 +265,7 @@ EOS
     sleep 0.5
     osascript -e 'tell application "System Events" to keystroke "q"' >/dev/null
     sleep 1
-    close_shot_windows
+    close_shot_window
 }
 
 # --- macOS app -------------------------------------------------------------
