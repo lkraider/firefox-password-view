@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keywise — reads a Firefox profile's saved logins</title>
+<meta name="description" content="Reads a Firefox profile's saved logins with no dependencies. One static binary for macOS, Windows and Linux.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lkraider.github.io/keywise/">
+<meta property="og:title" content="Keywise">
+<meta property="og:description" content="Reads a Firefox profile's saved logins with no dependencies. One static binary for macOS, Windows and Linux.">
+<meta property="og:image" content="https://lkraider.github.io/keywise/images/social-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Keywise card: the gold key icon, the name, and a screenshot of the terminal UI listing five logins.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lkraider.github.io/keywise/images/social-preview.png">
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #5b5b5b;
+    --rule: #d8d8d4;
+    --paper: #fbfaf8;
+    --code-bg: #f0efeb;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+    font-size: clamp(17px, 1.1vw + 12px, 19px);
+    line-height: 1.65;
+  }
+  main {
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 8vw, 6rem) 1.5rem 4rem;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 2.6rem);
+    font-weight: 600;
+    margin: 0 0 0.3em;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+  h1 img { width: 1em; height: 1em; border-radius: 4px; } /* NEW: scales the icon with h1's clamp() instead of a fixed 96px */
+  .lede {
+    font-size: 1.2em;
+    color: var(--muted);
+    margin: 0 0 2.2em;
+  }
+  .thesis {
+    font-size: 1.08em;
+    line-height: 1.7;
+    padding: 0 0 0 1.1em;
+    border-left: 2px solid var(--rule);
+    margin: 2.4em 0;
+  }
+  .thesis strong { font-weight: 600; }
+  h2 {
+    font-size: 1.05em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 2.6em 0 0.9em;
+  }
+  p { margin: 0.9em 0; }
+  ul { margin: 0.9em 0; padding-left: 1.3em; }
+  li { margin: 0.45em 0; }
+  a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
+  a:hover { color: var(--muted); }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  pre {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.86em;
+    line-height: 1.6;
+    background: var(--code-bg);
+    padding: 1em 1.1em;
+    border-radius: 5px;
+    overflow-x: auto;
+    margin: 1em 0;
+  }
+  pre code { background: none; padding: 0; }
+  figure { margin: 1.6em 0; }
+  figure img {
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    display: block;
+  } /* NEW: the three screenshots */
+  figcaption {
+    font-size: 0.85em;
+    color: var(--muted);
+    margin-top: 0.6em;
+  } /* NEW: lowercase caption under each screenshot */
+  .technical-style {
+    display: block;
+    margin-top: 0.3em;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.82em;
+    color: var(--muted);
+  } /* NEW: the mechanism half of each "What it does" item */
+  hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 3em 0;
+  }
+  footer {
+    color: var(--muted);
+    font-size: 0.92em;
+  }
+  footer p { margin: 0.5em 0; }
+  .links a { margin-right: 1.2em; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+
+  <h1><img src="images/icon.png" alt="">Keywise</h1>
+  <p class="lede">Reads a Firefox profile's saved logins with no dependencies.</p>
+
+  <div class="thesis">
+    A Zig core reads <code>key4.db</code> and <code>logins.json</code>, then
+    decrypts the passwords. That core holds the SQLite parser and the
+    AES-256-CBC unwrap. It links no libsqlite3 and no NSS. It backs a
+    libvaxis terminal UI on macOS and Linux, a SwiftUI app on macOS and a
+    Win32 app on Windows.
+  </div>
+
+  <figure>
+    <img src="images/tui.png" alt="The terminal UI listing five logins with masked passwords, one revealed, and the confirmation prompt on the Firefox Accounts row">
+    <figcaption>the cross-platform terminal UI</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/macos-app.png" alt="The macOS app listing the same five logins, each with a copy button, and icons marking the Firefox Accounts row and the extension row">
+    <figcaption>the macOS app</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/windows-app.png" alt="The Windows app listing the same five logins in a report-view list, with the second row selected and its password revealed, and the status bar showing the login count">
+    <figcaption>the Windows app</figcaption>
+  </figure>
+
+  <h2>What it does</h2>
+  <ul>
+    <li>decrypts passwords itself without requiring Mozilla's NSS crypto library. <span class="technical-style">The unwrap is AES-256-CBC under PBKDF2, done in <code>pbes2.zig</code> and <code>aescbc.zig</code>.</span></li>
+    <li>builds for macOS, Windows and Linux from one codebase. <span class="technical-style">Reads the SQLite file format directly, so the core links no libsqlite3.</span></li>
+    <li>gives each platform its own native interface. <span class="technical-style">A terminal UI on libvaxis, a macOS app in SwiftUI, and a Windows app in Win32. All three read through the same core.</span></li>
+    <li>proves the binary reading your passwords is built from this source. <span class="technical-style">Fully reproducible builds, CI packages the Linux tarballs, the macOS <code>keywise</code> tarball, and the Windows zips twice from a clean build and diffs them bit for bit. The macOS app zip gets its own check: two separate runners package it, and a mismatch between their hashes stops the release before upload. Details are in <a href="https://github.com/lkraider/keywise/blob/main/docs/REPRODUCIBLE.md">docs/REPRODUCIBLE.md</a>.</span></li>
+    <li>handles old and new Firefox password formats automatically. <span class="technical-style">Firefox 144 added an AES-256 key beside the older 3DES key. This picks whichever key decrypts to a valid length.</span></li>
+    <li>runs on any Linux distro from a single download. <span class="technical-style">Built statically with musl, so it needs no shared C library installed.</span></li>
+    <li>keeps passwords hidden until you choose to look. <span class="technical-style">In the TUI, <code>enter</code> reveals the selected row. <code>y</code> copies it with nothing shown on screen.</span></li>
+    <li>keeps a copied password out of your clipboard history. <span class="technical-style">Marks the copy so a clipboard manager skips it. On Windows that covers <code>Win+V</code> history and the cloud clipboard.</span></li>
+    <li>clears the clipboard automatically after use. <span class="technical-style">Clears it 30 seconds after a copy, and only if the password is still on the clipboard.</span></li>
+    <li>double-checks before exposing your account's sync password. <span class="technical-style">Asks a second time before the Firefox Accounts row (<code>chrome://FirefoxAccounts</code>), since that password is the sync key for the whole account.</span></li>
+  </ul>
+
+  <h2>Install</h2>
+
+  <pre><code>brew tap lkraider/keywise https://github.com/lkraider/keywise
+brew install lkraider/keywise/keywise             # the terminal UI
+brew install --cask lkraider/keywise/keywise-app  # the macOS app</code></pre>
+  <p>The app is ad-hoc signed, so Gatekeeper blocks a first launch. Right-click it in Finder and choose Open. Clearing the quarantine flag works too: <code>xattr -cr /Applications/Keywise.app</code></p>
+
+  <pre><code><a href="https://github.com/lkraider/keywise/releases/latest/download/keywise-x86_64-linux.tar.gz">keywise-x86_64-linux.tar.gz</a>
+<a href="https://github.com/lkraider/keywise/releases/latest/download/keywise-aarch64-linux.tar.gz">keywise-aarch64-linux.tar.gz</a></code></pre>
+  <p>On Linux, download the file for your architecture, then <code>tar -xzf</code> it. The binary is static, so it runs on any distro.</p>
+
+  <pre><code>Keywise-&lt;version&gt;-windows-arm64.zip
+Keywise-&lt;version&gt;-windows-x86_64.zip</code></pre>
+  <p>On Windows, download the file for your architecture from the <a href="https://github.com/lkraider/keywise/releases/latest">latest release</a> and unzip it. It is unsigned, so SmartScreen shows a warning on first launch. Choose More info, then Run anyway.</p>
+
+  <hr>
+
+  <footer>
+    <p class="links">
+      <a href="https://github.com/lkraider/keywise">GitHub</a><a href="https://github.com/lkraider/keywise/releases">Releases</a><a href="https://github.com/lkraider/keywise#readme">Full README</a>
+    </p>
+    <p>MIT licensed.</p>
+    <p>Firefox is a trademark of the Mozilla Foundation in the US and other countries. This project is not affiliated with Mozilla.</p>
+  </footer>
+
+</main>
+</body>
+</html>

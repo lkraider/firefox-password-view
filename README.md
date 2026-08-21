@@ -1,6 +1,9 @@
 # ![](docs/images/icon.png) Keywise
 
 [![CI](https://github.com/lkraider/keywise/actions/workflows/ci.yml/badge.svg)](https://github.com/lkraider/keywise/actions/workflows/ci.yml)
+[![reproducible: yes](https://img.shields.io/badge/reproducible-yes-brightgreen)](docs/REPRODUCIBLE.md)
+
+**Page:** https://lkraider.github.io/keywise/
 
 A terminal UI, a macOS app and a Windows app show the saved logins in a
 local Firefox profile. All three read them through one Zig core. The
@@ -23,9 +26,8 @@ Windows x86_64 and Windows ARM64.
 
 ```
 brew tap lkraider/keywise https://github.com/lkraider/keywise
-brew trust lkraider/keywise  # Homebrew 6.0 and newer
-brew install keywise             # the terminal UI
-brew install --cask keywise-app  # the macOS app
+brew install lkraider/keywise/keywise             # the terminal UI
+brew install --cask lkraider/keywise/keywise-app  # the macOS app
 ```
 
 The app is ad-hoc signed. This project has no Apple Developer ID, so it is
