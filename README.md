@@ -29,9 +29,16 @@ brew install --cask keywise-app  # the macOS app
 ```
 
 The app is ad-hoc signed. This project has no Apple Developer ID, so it is
-not notarized. On first launch, right-click the app in Finder and choose
-Open. Gatekeeper otherwise blocks it as coming from an unidentified
-developer.
+not notarized. Gatekeeper blocks a first launch as coming from an
+unidentified developer. Right-click the app in Finder and choose Open.
+Clearing the quarantine flag works too:
+
+```
+xattr -cr /Applications/Keywise.app
+```
+
+An extended attribute sits outside the code signature, so
+`codesign -v --deep --strict` still passes after that command.
 
 On Linux, download `keywise-x86_64-linux.tar.gz` or
 `keywise-aarch64-linux.tar.gz` from the releases page:
